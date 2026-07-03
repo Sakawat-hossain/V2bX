@@ -97,9 +97,21 @@ direct forwarding for plain HTTP requests. Same optional Basic
 Proxy-Authorization behavior as SOCKS5: auth is required only when the node
 has users configured.
 
-## Mieru — planned
+## Mieru — done
 
-## AnyTLS — planned
+Backed by the `enfein/mieru/v3` embedding API. Each user's UUID is used as
+the mieru username and the panel-issued password as the mieru password;
+mieru enforces its own password-strength rules, so weak passwords may be
+rejected at start. Transport defaults to TCP — set the node's
+`Extra["transport"]` to `"UDP"` to bind a UDP mieru transport instead. Only
+TCP `CONNECT` is relayed; UDP-associate requests are declined for now. No
+TLS certificate is needed (mieru has its own obfuscated transport).
 
-TLS required; config shape will mirror Trojan's cert handling once
-implemented.
+## AnyTLS — done
+
+Backed by the `anytls/sing-anytls` session library. Requires
+`cert_file`/`key_file` — the listener terminates TLS and hands the plaintext
+stream to the AnyTLS session layer, which authenticates on SHA-256 of the
+user's password. The default AnyTLS padding scheme is used. The panel UUID
+(or the numeric user ID if no UUID) is the display name used for stats
+attribution.

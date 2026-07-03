@@ -10,9 +10,11 @@ import (
 	"github.com/Sakawat-hossain/V2bX/internal/cli"
 
 	// Protocol backends register themselves via init(); import for side effects.
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/anytls"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/httpproxy"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/hysteria"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/hysteria2"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/mieru"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/naive"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/shadowsocks"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/socks5"

@@ -19,8 +19,8 @@ panel client, built on top of well-known protocol SDKs.
 | Hysteria2                 | ✅ done |
 | TUIC                      | ✅ done |
 | Naive (NaiveProxy)        | ✅ done |
-| Mieru                     | planned |
-| AnyTLS                    | planned |
+| Mieru                     | ✅ done |
+| AnyTLS                    | ✅ done |
 
 Shadowsocks covers `aes-128-gcm`, `aes-192-gcm`, `aes-256-gcm`,
 `chacha20-ietf-poly1305`, and the three Shadowsocks-2022 blake3 ciphers, with
