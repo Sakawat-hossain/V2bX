@@ -15,9 +15,9 @@ panel client, built on top of well-known protocol SDKs.
 | Trojan                    | ✅ done |
 | VMess                     | ✅ done |
 | VLess (XTLS/Vision)       | ✅ done |
-| Hysteria (v1)             | planned |
-| Hysteria2                 | planned |
-| TUIC                      | planned |
+| Hysteria (v1)             | ✅ done |
+| Hysteria2                 | ✅ done |
+| TUIC                      | ✅ done |
 | Naive (NaiveProxy)        | planned |
 | Mieru                     | planned |
 | AnyTLS                    | planned |

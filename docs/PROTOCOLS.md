@@ -51,18 +51,25 @@ silently rather than returning an error, matching Trojan's design goal of
 being indistinguishable from a plain TLS server to anyone without a valid
 password.
 
-## Hysteria (v1) — planned
+## Hysteria (v1) — done
 
-QUIC-based; needs a certificate. Self-signed certs work with clients set to
-skip verification, matching the ecosystem convention for this protocol.
+QUIC-based; requires `cert_file`/`key_file` (self-signed is fine — clients
+typically skip verification for this protocol, matching ecosystem
+convention). Server-side bandwidth is fixed at 1 Gbps send/receive
+internally since the config schema doesn't yet expose a per-node bandwidth
+knob; actual throughput is still governed by the client's own congestion
+control and any `limits.default_speed_limit_bytes` enforcement layered on
+top in the future.
 
-## Hysteria2 — planned
+## Hysteria2 — done
 
-Same certificate requirements as Hysteria v1; wire format differs.
+Same certificate requirements as Hysteria v1; wire format differs and there
+is no bandwidth negotiation step, so no equivalent BPS setting is needed.
 
-## TUIC — planned
+## TUIC — done
 
-QUIC-based; needs a certificate, same as Hysteria/Hysteria2.
+QUIC-based; requires `cert_file`/`key_file` like Hysteria/Hysteria2. Each
+user needs both a UUID and a password (TUIC authenticates on the pair).
 
 ## SOCKS5 — done
 
