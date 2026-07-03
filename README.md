@@ -70,33 +70,58 @@ curl -fsSL https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/install.s
 sudo bash install.sh install
 ```
 
-That drops the binary at `/usr/local/bin/v2bx`, a starter config at `/etc/v2bx/config.json`, and a systemd unit. Edit `panel.api_host`, `panel.api_key`, and your `nodes` list, then:
+That drops the binary at `/usr/local/bin/v2bx`, installs a systemd unit, and then offers to run the **interactive config wizard** — answer a few prompts (panel URL, API key, node type) and it writes `/etc/v2bx/config.json` and starts the service for you. No hand-editing JSON to get going.
+
+Prefer a menu to memorizing commands? Just run:
 
 ```bash
-sudo v2bx enable   # start on boot
-sudo v2bx start
-sudo v2bx status
-sudo v2bx log      # follow the journal
+sudo v2bx
 ```
 
 Update or remove any time:
 
 ```bash
-sudo bash install.sh update
-sudo bash install.sh uninstall
+sudo bash install.sh update    # or: sudo v2bx update
+sudo bash install.sh uninstall # or: sudo v2bx uninstall
 ```
 
 ## Commands
 
+Run `v2bx` with no arguments for an interactive menu, or use any command directly:
+
 | Command | Does |
 |---------|------|
+| `v2bx` | open the interactive menu |
+| `v2bx generate [-c PATH]` | interactive config wizard → writes `config.json` |
 | `v2bx server [-c PATH]` | run the agent in the foreground (what systemd runs) |
 | `v2bx start` · `stop` · `restart` | manage the systemd service |
 | `v2bx status` | show service status |
 | `v2bx enable` · `disable` | toggle start-on-boot |
 | `v2bx reload` | force an immediate panel resync (SIGHUP) |
 | `v2bx log` | follow the service journal |
+| `v2bx update` | update to the latest release in place |
+| `v2bx x25519` | generate an X25519 key pair (Reality/VLESS) |
+| `v2bx uninstall` | remove the service and binary |
 | `v2bx version` | print version |
+
+## Docker
+
+A multi-arch image (`linux/amd64`, `linux/arm64`) is published to GHCR on every release.
+
+```bash
+mkdir config
+docker run --rm -it -v "$PWD/config:/etc/v2bx" \
+  ghcr.io/sakawat-hossain/v2bx:latest generate   # writes config, one time
+docker run -d --name v2bx --restart unless-stopped \
+  --network host -v "$PWD/config:/etc/v2bx" \
+  ghcr.io/sakawat-hossain/v2bx:latest
+```
+
+Or with Compose — see [`docker-compose.yml`](docker-compose.yml):
+
+```bash
+docker compose up -d
+```
 
 ## Configuration
 

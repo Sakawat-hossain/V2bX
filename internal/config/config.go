@@ -72,11 +72,33 @@ type NodeLimits struct {
 	TrafficResetDay        int    `json:"traffic_reset_day,omitempty"` // day-of-month, 0 = panel default
 }
 
-var validNodeTypes = map[string]bool{
-	"shadowsocks": true, "vmess": true, "vless": true, "trojan": true,
-	"hysteria": true, "hysteria2": true, "tuic": true, "socks5": true,
-	"naive": true, "http": true, "mieru": true, "anytls": true,
+// NodeTypes lists every supported node type, in a stable presentation order
+// (grouped by wire family). It is the single source of truth for both
+// validation and the interactive config wizard.
+var NodeTypes = []string{
+	"shadowsocks", "vmess", "vless",
+	"trojan", "naive", "anytls",
+	"hysteria", "hysteria2", "tuic",
+	"socks5", "http", "mieru",
 }
+
+// TLSRequired reports whether a node type must have a TLS certificate to run.
+func TLSRequired(nodeType string) bool {
+	switch nodeType {
+	case "trojan", "naive", "anytls", "hysteria", "hysteria2", "tuic":
+		return true
+	default:
+		return false
+	}
+}
+
+var validNodeTypes = func() map[string]bool {
+	m := make(map[string]bool, len(NodeTypes))
+	for _, t := range NodeTypes {
+		m[t] = true
+	}
+	return m
+}()
 
 var validCertModes = map[string]bool{"": true, "none": true, "http": true, "dns": true, "self": true}
 

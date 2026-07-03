@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,12 @@ import (
 
 // UnitName is the systemd unit installed by install.sh.
 const UnitName = "v2bx"
+
+const (
+	unitPath   = "/etc/systemd/system/v2bx.service"
+	configDir  = "/etc/v2bx"
+	binaryPath = "/usr/local/bin/v2bx"
+)
 
 func runSystemctl(args ...string) error {
 	cmd := exec.Command("systemctl", args...)
@@ -49,4 +56,36 @@ func TailLogs() error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+// Uninstall stops and disables the service, removes the systemd unit and the
+// binary, and leaves the config in place (removal is offered separately so a
+// reinstall keeps your panel details). It confirms before doing anything.
+func Uninstall() error {
+	fmt.Printf("This will stop v2bx, remove the systemd unit (%s), and delete the binary (%s).\n", unitPath, binaryPath)
+	in := bufio.NewScanner(os.Stdin)
+	if !askYesNo(in, "Continue?", false) {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	_ = runSystemctl("disable", "--now", UnitName)
+	if err := os.Remove(unitPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "warning: remove %s: %v\n", unitPath, err)
+	}
+	_ = runSystemctl("daemon-reload")
+
+	if askYesNo(in, fmt.Sprintf("Also delete the config directory %s?", configDir), false) {
+		if err := os.RemoveAll(configDir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: remove %s: %v\n", configDir, err)
+		}
+	} else {
+		fmt.Printf("Kept %s.\n", configDir)
+	}
+
+	if err := os.Remove(binaryPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "warning: remove %s: %v\n", binaryPath, err)
+	}
+	fmt.Println("Uninstalled.")
+	return nil
 }

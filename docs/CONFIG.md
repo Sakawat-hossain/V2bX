@@ -5,6 +5,10 @@ override with `v2bx server -c <path>`). See
 [`config.example.json`](../config.example.json) for a fully worked example
 covering every supported node type.
 
+The fastest way to a working file is `v2bx generate` — an interactive wizard
+that prompts for your panel and node details and writes a valid config. This
+page documents every field for when you want to edit it directly.
+
 ## Top level
 
 | Field   | Type         | Required | Description |

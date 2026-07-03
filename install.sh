@@ -94,7 +94,25 @@ do_install() {
 	download_binary "$version"
 	install_config
 	install_systemd_unit
-	log "install complete. Edit ${CONFIG_DIR}/config.json, then run: systemctl enable --now v2bx"
+	log "install complete."
+
+	# Offer the interactive config wizard on a fresh install so a new user
+	# never has to hand-edit JSON to get started.
+	if [ -t 0 ] && [ ! -s "${CONFIG_DIR}/config.json.configured" ]; then
+		printf '\033[1;32m[v2bx]\033[0m Run the interactive config wizard now? [Y/n]: '
+		read -r answer
+		case "$answer" in
+			[Nn]*) log "skipped. Run 'v2bx generate' any time, then 'v2bx enable && v2bx start'." ;;
+			*)
+				"${INSTALL_DIR}/${BIN_NAME}" generate -c "${CONFIG_DIR}/config.json" \
+					&& touch "${CONFIG_DIR}/config.json.configured" \
+					&& systemctl enable --now v2bx \
+					&& log "service started. Check it with: v2bx status"
+				;;
+		esac
+	else
+		log "edit ${CONFIG_DIR}/config.json (or run 'v2bx generate'), then: systemctl enable --now v2bx"
+	fi
 }
 
 do_update() {
