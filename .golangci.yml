@@ -1,10 +1,18 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - govet
     - staticcheck
     - ineffassign
     - unused
+  exclusions:
+    rules:
+      # sing-shadowsocks' Handler interface signature still uses the
+      # deprecated M.Metadata type, so our implementation must too.
+      - linters: [staticcheck]
+        text: "SA1019: M.Metadata is deprecated"
