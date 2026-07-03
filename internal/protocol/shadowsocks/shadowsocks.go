@@ -7,7 +7,6 @@ package shadowsocks
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -23,6 +22,7 @@ import (
 	N "github.com/sagernet/sing/common/network"
 
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
 func init() {
@@ -183,37 +183,10 @@ func (s *Server) NewConnection(ctx context.Context, conn net.Conn, metadata M.Me
 	}
 	defer upstream.Close()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		n, _ := io.Copy(upstream, conn)
-		counter.upload.Add(uint64(n))
-		// Unblock the reverse copy once the client is done sending, so a
-		// half-closed connection doesn't hang the relay indefinitely.
-		closeWrite(upstream)
-	}()
-	go func() {
-		defer wg.Done()
-		n, _ := io.Copy(conn, upstream)
-		counter.download.Add(uint64(n))
-		closeWrite(conn)
-	}()
-	wg.Wait()
+	up, down := relay.Pipe(conn, upstream)
+	counter.upload.Add(up)
+	counter.download.Add(down)
 	return nil
-}
-
-// closeWrite half-closes the write side if the connection supports it,
-// falling back to a full close otherwise.
-func closeWrite(conn net.Conn) {
-	type writeCloser interface {
-		CloseWrite() error
-	}
-	if wc, ok := conn.(writeCloser); ok {
-		wc.CloseWrite()
-		return
-	}
-	conn.Close()
 }
 
 // NewPacketConnection implements sing's N.UDPConnectionHandler, relaying a

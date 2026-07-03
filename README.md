@@ -10,15 +10,15 @@ panel client, built on top of well-known protocol SDKs.
 | Protocol                | Status |
 |--------------------------|--------|
 | Shadowsocks (AEAD + 2022) | ✅ done |
+| SOCKS5                    | ✅ done |
+| HTTP                      | ✅ done |
+| Trojan                    | ✅ done |
 | VMess                     | planned |
 | VLess (XTLS/Vision)       | planned |
-| Trojan                    | planned |
 | Hysteria (v1)             | planned |
 | Hysteria2                 | planned |
 | TUIC                      | planned |
-| SOCKS5                    | planned |
 | Naive (NaiveProxy)        | planned |
-| HTTP                      | planned |
 | Mieru                     | planned |
 | AnyTLS                    | planned |
 

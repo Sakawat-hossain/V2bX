@@ -35,10 +35,15 @@ Notes:
 Flow (`xtls-rprx-vision` or none) is expected to travel as a per-user field
 from the panel's user list once implemented.
 
-## Trojan — planned
+## Trojan — done
 
-TLS is mandatory; `cert_mode: self` with `cert_file`/`key_file` is the
-straightforward path until ACME (`http`/`dns`) automation lands.
+TLS is mandatory; only `cert_mode: self` with `cert_file`/`key_file` is
+currently wired up — ACME (`http`/`dns`) automation is planned. The
+password digest (SHA-224, lowercase hex) is compared as an opaque token
+against every configured user; on mismatch the connection is dropped
+silently rather than returning an error, matching Trojan's design goal of
+being indistinguishable from a plain TLS server to anyone without a valid
+password.
 
 ## Hysteria (v1) — planned
 
@@ -53,18 +58,26 @@ Same certificate requirements as Hysteria v1; wire format differs.
 
 QUIC-based; needs a certificate, same as Hysteria/Hysteria2.
 
-## SOCKS5 — planned
+## SOCKS5 — done
 
-No TLS. Straightforward relay once implemented.
+No TLS. Username/password auth (RFC 1929) is enabled automatically when the
+node has a non-empty user list (matched against each user's `uuid`/`password`
+fields); with no users configured, the listener accepts anonymous
+connections. Only the `CONNECT` command is supported (no `BIND`/`UDP
+ASSOCIATE` yet).
 
 ## Naive (NaiveProxy) — planned
 
 HTTP/2 CONNECT tunneled over TLS — needs a real or self-signed certificate
 to look like an ordinary HTTPS server to passive observers.
 
-## HTTP — planned
+## HTTP — done
 
-Plain HTTP CONNECT proxy, no TLS.
+Plain HTTP proxy, no TLS at this layer (front it with a TLS-terminating
+reverse proxy if needed). Supports `CONNECT` tunneling for HTTPS traffic and
+direct forwarding for plain HTTP requests. Same optional Basic
+Proxy-Authorization behavior as SOCKS5: auth is required only when the node
+has users configured.
 
 ## Mieru — planned
 

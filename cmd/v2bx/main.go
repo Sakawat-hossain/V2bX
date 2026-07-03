@@ -10,7 +10,10 @@ import (
 	"github.com/Sakawat-hossain/V2bX/internal/cli"
 
 	// Protocol backends register themselves via init(); import for side effects.
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/httpproxy"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/shadowsocks"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/socks5"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/trojan"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
