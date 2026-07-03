@@ -20,7 +20,11 @@ func Generate(path string) error {
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 1<<20)
 
-	fmt.Println("V2bX config wizard — press Enter to accept the [default].")
+	fmt.Println("========================================")
+	fmt.Println(" V2bX config wizard")
+	fmt.Println("========================================")
+	fmt.Println(" Works with XBoard, V2Board, and any panel that speaks the")
+	fmt.Println(" UniProxy node API. Press Enter to accept the [default].")
 	fmt.Println()
 
 	if _, err := os.Stat(path); err == nil {
@@ -31,24 +35,25 @@ func Generate(path string) error {
 	}
 
 	var cfg config.Config
-	cfg.Log.Level = ask(in, "Log level (debug/info/warn/error)", "info")
-	cfg.Log.Output = ask(in, "Log output (stdout or a file path)", "stdout")
+	// Log defaults are filled in by Validate; no need to ask.
 
-	fmt.Println("\nPanel connection")
-	cfg.Panel.ApiHost = askRequired(in, "Panel API host (e.g. https://panel.example.com)")
-	cfg.Panel.ApiKey = askRequired(in, "Panel API key / node token")
-	cfg.Panel.SyncInterval = askInt(in, "Sync interval (seconds)", 60)
+	fmt.Println("Panel connection")
+	cfg.Panel.ApiHost = askRequired(in, "  Panel URL (e.g. https://panel.example.com)")
+	cfg.Panel.ApiKey = askRequired(in, "  Panel API key / node token")
+	fmt.Println()
 
-	fmt.Println("\nNodes — add one per listener this server should run.")
+	fmt.Println("Nodes — add one for each node ID this server should run.")
 	for {
 		entry, err := promptNode(in)
 		if err != nil {
 			return err
 		}
 		cfg.Nodes = append(cfg.Nodes, entry)
+		fmt.Println()
 		if !askYesNo(in, "Add another node?", false) {
 			break
 		}
+		fmt.Println()
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -74,24 +79,41 @@ func Generate(path string) error {
 	return nil
 }
 
+// commonNodeTypes are the protocols most panels hand out; the wizard lists
+// these first, with everything else behind "more".
+var commonNodeTypes = []string{"shadowsocks", "vless", "vmess", "trojan", "hysteria2"}
+
 func promptNode(in *bufio.Scanner) (config.NodeEntry, error) {
 	var e config.NodeEntry
 	e.NodeID = int64(askInt(in, "  Node ID (must match the panel)", 0))
 
-	e.NodeType = askChoice(in, "  Node type", config.NodeTypes)
-	e.ListenIP = ask(in, "  Listen IP", "0.0.0.0")
-	e.Enabled = askYesNo(in, "  Enabled?", true)
+	choices := append(append([]string{}, commonNodeTypes...), "more…")
+	pick := askChoice(in, "  Protocol", choices, "shadowsocks")
+	if pick == "more…" {
+		pick = askChoice(in, "  Protocol (all)", config.NodeTypes, "shadowsocks")
+	}
+	e.NodeType = pick
 
-	certDefault := "none"
-	if config.TLSRequired(e.NodeType) {
-		fmt.Printf("  (%s needs TLS)\n", e.NodeType)
-		certDefault = "self"
+	e.ListenIP = ask(in, "  Listen IP", "0.0.0.0")
+
+	// TLS: forced on for protocols that require it, otherwise offered.
+	wantTLS := config.TLSRequired(e.NodeType)
+	if wantTLS {
+		fmt.Printf("  (%s always uses TLS)\n", e.NodeType)
+	} else {
+		wantTLS = askYesNo(in, "  Configure TLS for this node?", false)
 	}
-	e.CertMode = askChoice(in, "  Cert mode", []string{"none", "http", "dns", "self"}, certDefault)
-	if e.CertMode == "self" {
-		e.CertFile = askRequired(in, "  Certificate file path (PEM)")
-		e.KeyFile = askRequired(in, "  Private key file path (PEM)")
+	if wantTLS {
+		e.CertMode = askChoice(in, "  Cert mode", []string{"self", "http", "dns"}, "self")
+		if e.CertMode == "self" {
+			e.CertFile = askRequired(in, "  Certificate file path (PEM)")
+			e.KeyFile = askRequired(in, "  Private key file path (PEM)")
+		}
+	} else {
+		e.CertMode = "none"
 	}
+
+	e.Enabled = askYesNo(in, "  Enable this node now?", true)
 	return e, nil
 }
 

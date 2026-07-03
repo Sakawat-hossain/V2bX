@@ -37,11 +37,11 @@ func feedStdin(t *testing.T, answers string, fn func()) {
 func TestGenerateWritesValidConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 
-	// level, output, host, key, interval, then a shadowsocks node and a
-	// trojan node (which must collect a cert), then stop.
-	answers := "\n\nhttps://panel.example.com\nsecret\n\n" +
-		"1\n1\n\n\n\ny\n" + // node 1: shadowsocks, defaults, cert none, add another
-		"2\ntrojan\n\n\n\n/tmp/c.crt\n/tmp/c.key\nn\n" // node 2: trojan self-cert, stop
+	// panel URL, key, then a shadowsocks node (no TLS) and a trojan node
+	// (forces a cert), then stop.
+	answers := "https://panel.example.com\nsecret\n" +
+		"1\n1\n\n\n\ny\n" + // node 1: id, protocol=shadowsocks, listen, TLS=no, enable, add another
+		"2\ntrojan\n\n\n/tmp/c.crt\n/tmp/c.key\n\nn\n" // node 2: id, protocol=trojan, listen, certmode=self, cert, key, enable, stop
 
 	feedStdin(t, answers, func() {
 		if err := Generate(path); err != nil {

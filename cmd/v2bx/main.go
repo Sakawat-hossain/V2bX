@@ -64,8 +64,15 @@ func main() {
 		configPath := fs.String("c", defaultConfigPath, "path to config.json")
 		fs.Parse(os.Args[2:])
 		err = cli.DeleteNode(*configPath)
+	case "edit":
+		fs := flag.NewFlagSet("edit", flag.ExitOnError)
+		configPath := fs.String("c", defaultConfigPath, "path to config.json")
+		fs.Parse(os.Args[2:])
+		err = cli.EditConfig(*configPath)
 	case "bbr":
 		err = cli.EnableBBR()
+	case "firewall":
+		err = cli.OpenFirewall()
 	case "start":
 		err = cli.StartService()
 	case "stop":
@@ -125,7 +132,9 @@ Usage:
   v2bx log                                 follow the service journal
   v2bx update                              update to the latest release
   v2bx x25519                              generate an X25519 key pair
+  v2bx edit [-c PATH]                      edit the config in $EDITOR
   v2bx bbr                                 enable the BBR congestion control
+  v2bx firewall                            open all inbound ports
   v2bx uninstall                           remove the service and binary
   v2bx version                             print version information
 `)
