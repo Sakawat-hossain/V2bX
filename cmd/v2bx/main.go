@@ -54,6 +54,18 @@ func main() {
 		configPath := fs.String("c", defaultConfigPath, "path to write config.json")
 		fs.Parse(os.Args[2:])
 		err = cli.Generate(*configPath)
+	case "add":
+		fs := flag.NewFlagSet("add", flag.ExitOnError)
+		configPath := fs.String("c", defaultConfigPath, "path to config.json")
+		fs.Parse(os.Args[2:])
+		err = cli.AddNode(*configPath)
+	case "del", "delete":
+		fs := flag.NewFlagSet("del", flag.ExitOnError)
+		configPath := fs.String("c", defaultConfigPath, "path to config.json")
+		fs.Parse(os.Args[2:])
+		err = cli.DeleteNode(*configPath)
+	case "bbr":
+		err = cli.EnableBBR()
 	case "start":
 		err = cli.StartService()
 	case "stop":
@@ -101,6 +113,8 @@ Usage:
   v2bx                                     open the interactive menu
   v2bx server [-c /etc/v2bx/config.json]   run the agent in the foreground
   v2bx generate [-c PATH]                  interactive config wizard
+  v2bx add [-c PATH]                       add a node to the config
+  v2bx del [-c PATH]                       remove a node from the config
   v2bx start                               start the v2bx systemd service
   v2bx stop                                stop the v2bx systemd service
   v2bx restart                             restart the v2bx systemd service
@@ -111,6 +125,7 @@ Usage:
   v2bx log                                 follow the service journal
   v2bx update                              update to the latest release
   v2bx x25519                              generate an X25519 key pair
+  v2bx bbr                                 enable the BBR congestion control
   v2bx uninstall                           remove the service and binary
   v2bx version                             print version information
 `)

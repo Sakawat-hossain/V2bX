@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -59,7 +58,7 @@ func Update(currentVersion string) error {
 	}
 
 	fmt.Printf("Installed %s to %s\n", tag, exePath)
-	if serviceIsActive() {
+	if ServiceActive() {
 		fmt.Println("Restarting service…")
 		return RestartService()
 	}
@@ -145,8 +144,4 @@ func downloadBinary(url string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("tarball did not contain a v2bx binary")
-}
-
-func serviceIsActive() bool {
-	return exec.Command("systemctl", "is-active", "--quiet", UnitName).Run() == nil
 }

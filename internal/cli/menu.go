@@ -7,14 +7,16 @@ import (
 	"strings"
 )
 
+const repoURL = "https://github.com/Sakawat-hossain/V2bX"
+
 // Menu is the interactive control panel shown when v2bx is run with no
 // arguments. It's a thin dispatcher over the same actions the subcommands
-// expose, for operators who'd rather pick from a list than memorize verbs.
+// expose, for operators who'd rather pick from a numbered list.
 func Menu(configPath, version string) error {
 	in := bufio.NewScanner(os.Stdin)
 	for {
 		printMenu(version)
-		fmt.Print("Select an option: ")
+		fmt.Print("Select [0-14]: ")
 		if !in.Scan() {
 			fmt.Println()
 			return nil
@@ -34,18 +36,22 @@ func Menu(configPath, version string) error {
 		case "5":
 			err = TailLogs()
 		case "6":
-			err = Generate(configPath)
-		case "7":
 			err = EnableService()
-		case "8":
+		case "7":
 			err = DisableService()
+		case "8":
+			err = Generate(configPath)
 		case "9":
-			err = ReloadService()
+			err = AddNode(configPath)
 		case "10":
-			err = Update(version)
+			err = DeleteNode(configPath)
 		case "11":
 			err = X25519()
 		case "12":
+			err = EnableBBR()
+		case "13":
+			err = Update(version)
+		case "14":
 			err = Uninstall()
 		case "0", "q", "quit", "exit":
 			return nil
@@ -63,18 +69,33 @@ func Menu(configPath, version string) error {
 }
 
 func printMenu(version string) {
+	const rule = "  ────────────────────────────────"
+	running := statusWord(ServiceActive(), "running", "stopped")
+	autostart := statusWord(ServiceEnabled(), "enabled", "disabled")
+
 	fmt.Printf(`
- V2bX %s
+  V2bX %s
+  %s
+%s
+   1) Start                8) Generate config
+   2) Stop                 9) Add a node
+   3) Restart             10) Delete a node
+   4) Status             ──────────────────
+   5) Logs               11) X25519 keypair
+  ──────────────────     12) Enable BBR
+   6) Enable on boot     ──────────────────
+   7) Disable on boot    13) Update
+                         14) Uninstall
+%s
+   0) Exit
 
-   Service          Setup
-   1) start          6) generate config
-   2) stop           7) enable on boot
-   3) restart        8) disable on boot
-   4) status         9) reload (resync panel)
-   5) logs          10) update to latest
-                    11) x25519 keypair
-                    12) uninstall
+  Service: %s    Autostart: %s
+`, version, repoURL, rule, rule, running, autostart)
+}
 
-   0) exit
-`, version)
+func statusWord(ok bool, yes, no string) string {
+	if ok {
+		return yes
+	}
+	return no
 }

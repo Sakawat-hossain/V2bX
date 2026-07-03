@@ -37,6 +37,16 @@ func StatusService() error  { return runSystemctl("status", UnitName, "--no-page
 func EnableService() error  { return runSystemctl("enable", UnitName) }
 func DisableService() error { return runSystemctl("disable", UnitName) }
 
+// ServiceActive reports whether the systemd unit is currently running.
+func ServiceActive() bool {
+	return exec.Command("systemctl", "is-active", "--quiet", UnitName).Run() == nil
+}
+
+// ServiceEnabled reports whether the systemd unit is set to start on boot.
+func ServiceEnabled() bool {
+	return exec.Command("systemctl", "is-enabled", "--quiet", UnitName).Run() == nil
+}
+
 // ReloadService asks the running agent to resync with the panel immediately
 // without dropping active connections, via SIGHUP.
 func ReloadService() error {
