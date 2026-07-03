@@ -13,8 +13,8 @@ panel client, built on top of well-known protocol SDKs.
 | SOCKS5                    | ✅ done |
 | HTTP                      | ✅ done |
 | Trojan                    | ✅ done |
-| VMess                     | planned |
-| VLess (XTLS/Vision)       | planned |
+| VMess                     | ✅ done |
+| VLess (XTLS/Vision)       | ✅ done |
 | Hysteria (v1)             | planned |
 | Hysteria2                 | planned |
 | TUIC                      | planned |

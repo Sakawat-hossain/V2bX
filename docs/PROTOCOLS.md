@@ -28,12 +28,18 @@ Notes:
   gets a distinct password on the same listener.
 - UDP is relayed on a best-effort, single-round-trip basis per association.
 
-## VMess — planned
+## VMess — done
 
-## VLess (XTLS/Vision) — planned
+Raw TCP transport only (AEAD, `alterId 0`); WebSocket and gRPC transports
+are not yet wired up — front the node with a fronting reverse proxy if you
+need those. UDP-over-VMess is not yet implemented.
 
-Flow (`xtls-rprx-vision` or none) is expected to travel as a per-user field
-from the panel's user list once implemented.
+## VLess (XTLS/Vision) — done
+
+Per-user `flow` (`""` or `xtls-rprx-vision`) comes from the panel's user
+list (`User.Flow`). If `cert_mode: self` with `cert_file`/`key_file` is set
+the listener terminates TLS itself; otherwise it expects TLS to already be
+terminated in front of it. UDP-over-VLess is not yet implemented.
 
 ## Trojan — done
 

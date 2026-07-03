@@ -14,6 +14,7 @@ type User struct {
 	ID          int64  `json:"id"`
 	UUID        string `json:"uuid"`
 	Password    string `json:"password"`
+	Flow        string `json:"flow,omitempty"`    // VLess flow control, e.g. "xtls-rprx-vision"; empty = none
 	SpeedLimit  uint64 `json:"speed_limit_bytes"` // bytes/sec, 0 = unlimited
 	DeviceLimit int    `json:"device_limit"`      // 0 = unlimited
 }

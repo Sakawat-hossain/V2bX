@@ -25,6 +25,7 @@ type UserResponse struct {
 	ID          int64  `json:"id"`
 	UUID        string `json:"uuid"`
 	Password    string `json:"password,omitempty"`
+	Flow        string `json:"flow,omitempty"`
 	SpeedLimit  uint64 `json:"speed_limit"`
 	DeviceLimit int    `json:"device_limit"`
 }

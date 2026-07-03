@@ -156,7 +156,7 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 			deviceLimit = entry.Limits.DeviceLimit
 		}
 		nc.Users = append(nc.Users, protocol.User{
-			ID: u.ID, UUID: u.UUID, Password: u.Password,
+			ID: u.ID, UUID: u.UUID, Password: u.Password, Flow: u.Flow,
 			SpeedLimit: speedLimit, DeviceLimit: deviceLimit,
 		})
 	}

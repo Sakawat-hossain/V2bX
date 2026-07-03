@@ -14,6 +14,8 @@ import (
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/shadowsocks"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/socks5"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/trojan"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/vless"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/vmess"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=...".
