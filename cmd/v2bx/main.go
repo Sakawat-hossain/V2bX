@@ -13,6 +13,7 @@ import (
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/httpproxy"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/hysteria"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/hysteria2"
+	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/naive"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/shadowsocks"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/socks5"
 	_ "github.com/Sakawat-hossain/V2bX/internal/protocol/trojan"

@@ -18,7 +18,7 @@ panel client, built on top of well-known protocol SDKs.
 | Hysteria (v1)             | ✅ done |
 | Hysteria2                 | ✅ done |
 | TUIC                      | ✅ done |
-| Naive (NaiveProxy)        | planned |
+| Naive (NaiveProxy)        | ✅ done |
 | Mieru                     | planned |
 | AnyTLS                    | planned |
 

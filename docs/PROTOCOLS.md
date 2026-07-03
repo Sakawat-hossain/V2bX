@@ -79,10 +79,15 @@ fields); with no users configured, the listener accepts anonymous
 connections. Only the `CONNECT` command is supported (no `BIND`/`UDP
 ASSOCIATE` yet).
 
-## Naive (NaiveProxy) — planned
+## Naive (NaiveProxy) — done
 
-HTTP/2 CONNECT tunneled over TLS — needs a real or self-signed certificate
-to look like an ordinary HTTPS server to passive observers.
+HTTP/2 `CONNECT` tunneled over TLS — requires `cert_file`/`key_file` (a real
+cert makes it blend in as an ordinary HTTPS site; self-signed works if the
+client is configured to trust it). Each user needs a UUID (used as the HTTP
+Basic username) and password; requests without valid `Proxy-Authorization`
+get a `407`. The optional length-padding scheme naive clients can negotiate
+is **not** implemented — plain h2 CONNECT relay only, which interoperates
+with naive clients that don't require padding.
 
 ## HTTP — done
 
