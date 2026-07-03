@@ -1,0 +1,243 @@
+// Package panel implements an HTTP client for the UniProxy-shaped node
+// communication API exposed by V2board-family panels (XBoard, V2Board, and
+// any compatible fork). Base URL, API key, and endpoint paths are all
+// config-driven so the same client works against any panel implementing the
+// same contract.
+package panel
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+)
+
+// Client talks to a single panel instance on behalf of one node.
+type Client struct {
+	baseURL    *url.URL
+	apiKey     string
+	configPath string
+	userPath   string
+	pushPath   string
+	alivePath  string
+
+	httpClient *http.Client
+	logger     *slog.Logger
+}
+
+// Options configures a new Client. Paths default to the standard UniProxy
+// routes when left empty.
+type Options struct {
+	ApiHost    string
+	ApiKey     string
+	ConfigPath string
+	UserPath   string
+	PushPath   string
+	AlivePath  string
+	HTTPClient *http.Client
+	Logger     *slog.Logger
+}
+
+// New builds a Client from Options, validating the base URL.
+func New(opts Options) (*Client, error) {
+	u, err := url.Parse(opts.ApiHost)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return nil, fmt.Errorf("panel: invalid api_host %q", opts.ApiHost)
+	}
+	c := &Client{
+		baseURL:    u,
+		apiKey:     opts.ApiKey,
+		configPath: firstNonEmpty(opts.ConfigPath, "/api/v1/server/UniProxy/config"),
+		userPath:   firstNonEmpty(opts.UserPath, "/api/v1/server/UniProxy/user"),
+		pushPath:   firstNonEmpty(opts.PushPath, "/api/v1/server/UniProxy/push"),
+		alivePath:  firstNonEmpty(opts.AlivePath, "/api/v1/server/UniProxy/alive"),
+		httpClient: opts.HTTPClient,
+		logger:     opts.Logger,
+	}
+	if c.httpClient == nil {
+		c.httpClient = &http.Client{Timeout: 15 * time.Second}
+	}
+	if c.logger == nil {
+		c.logger = slog.Default()
+	}
+	return c, nil
+}
+
+func firstNonEmpty(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+func (c *Client) endpoint(path string, query url.Values) string {
+	u := *c.baseURL
+	u.Path = path
+	if query != nil {
+		query.Set("token", c.apiKey)
+		u.RawQuery = query.Encode()
+	} else {
+		q := url.Values{"token": {c.apiKey}}
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
+}
+
+// FetchNodeConfig retrieves node configuration for nodeID.
+func (c *Client) FetchNodeConfig(ctx context.Context, nodeID int64, nodeType string) (*NodeConfigResponse, error) {
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}, "node_type": {nodeType}}
+	var resp NodeConfigResponse
+	if err := c.getJSON(ctx, c.configPath, q, &resp); err != nil {
+		return nil, fmt.Errorf("panel: fetch node config: %w", err)
+	}
+	return &resp, nil
+}
+
+// FetchUsers retrieves the current subscriber list for nodeID.
+func (c *Client) FetchUsers(ctx context.Context, nodeID int64, nodeType string) ([]UserResponse, error) {
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}, "node_type": {nodeType}}
+
+	raw, err := c.get(ctx, c.userPath, q)
+	if err != nil {
+		return nil, fmt.Errorf("panel: fetch users: %w", err)
+	}
+
+	// Some panels return {"users":[...]}, others a bare array. Try both.
+	var wrapped UserListResponse
+	if err := json.Unmarshal(raw, &wrapped); err == nil && wrapped.Users != nil {
+		return wrapped.Users, nil
+	}
+	var bare []UserResponse
+	if err := json.Unmarshal(raw, &bare); err != nil {
+		return nil, fmt.Errorf("panel: fetch users: unrecognized response shape: %w", err)
+	}
+	return bare, nil
+}
+
+// PushTraffic reports accumulated per-user traffic deltas for nodeID.
+func (c *Client) PushTraffic(ctx context.Context, nodeID int64, records []TrafficRecord) error {
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}}
+	if _, err := c.postJSON(ctx, c.pushPath, q, records); err != nil {
+		return fmt.Errorf("panel: push traffic: %w", err)
+	}
+	return nil
+}
+
+// ReportAlive reports the currently-online users for nodeID.
+func (c *Client) ReportAlive(ctx context.Context, nodeID int64, records []AliveRecord) error {
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}}
+	if _, err := c.postJSON(ctx, c.alivePath, q, records); err != nil {
+		return fmt.Errorf("panel: report alive: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) get(ctx context.Context, path string, query url.Values) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(path, query), nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.do(req)
+}
+
+func (c *Client) getJSON(ctx context.Context, path string, query url.Values, out any) error {
+	raw, err := c.get(ctx, path, query)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, out)
+}
+
+func (c *Client) postJSON(ctx context.Context, path string, query url.Values, body any) ([]byte, error) {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path, query), bytes.NewReader(buf))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return c.do(req)
+}
+
+func (c *Client) do(req *http.Request) ([]byte, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, truncate(body, 500))
+	}
+	return body, nil
+}
+
+func truncate(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[:n]) + "..."
+}
+
+// RetryConfig controls exponential backoff for SyncWithRetry.
+type RetryConfig struct {
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+	MaxAttempts  int // 0 = unlimited
+}
+
+// DefaultRetryConfig is a sensible backoff for panel sync loops: 1s, 2s, 4s,
+// ... capped at 60s, retried indefinitely so a briefly-unreachable panel
+// never brings the agent down.
+var DefaultRetryConfig = RetryConfig{
+	InitialDelay: 1 * time.Second,
+	MaxDelay:     60 * time.Second,
+	MaxAttempts:  0,
+}
+
+// WithRetry runs fn, retrying with exponential backoff on error until it
+// succeeds, ctx is cancelled, or MaxAttempts is exhausted. Every failure is
+// logged so operators can see the panel is unreachable without the agent
+// crashing or dropping its last-known-good state.
+func WithRetry(ctx context.Context, logger *slog.Logger, rc RetryConfig, name string, fn func(ctx context.Context) error) error {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	delay := rc.InitialDelay
+	if delay <= 0 {
+		delay = time.Second
+	}
+	attempt := 0
+	for {
+		attempt++
+		err := fn(ctx)
+		if err == nil {
+			return nil
+		}
+		logger.Warn("panel sync failed, retrying", "operation", name, "attempt", attempt, "delay", delay, "error", err)
+		if rc.MaxAttempts > 0 && attempt >= rc.MaxAttempts {
+			return fmt.Errorf("%s: giving up after %d attempts: %w", name, attempt, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+		delay *= 2
+		if rc.MaxDelay > 0 && delay > rc.MaxDelay {
+			delay = rc.MaxDelay
+		}
+	}
+}

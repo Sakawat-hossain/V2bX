@@ -1,0 +1,156 @@
+// Package config defines and parses the V2bX agent configuration file.
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+)
+
+// Config is the top-level agent configuration, loaded from config.json.
+type Config struct {
+	Log   LogConfig    `json:"log"`
+	Panel PanelConfig  `json:"panel"`
+	Nodes []NodeEntry  `json:"nodes"`
+}
+
+// LogConfig controls agent-wide logging.
+type LogConfig struct {
+	Level  string `json:"level"`  // debug|info|warn|error
+	Output string `json:"output"` // "stdout" or a file path
+}
+
+// PanelConfig describes how to reach the V2board-family panel.
+type PanelConfig struct {
+	ApiHost      string `json:"api_host"`
+	ApiKey       string `json:"api_key"`
+	SyncInterval int    `json:"sync_interval_seconds"`
+
+	// Endpoint paths are overridable so any panel implementing the same
+	// UniProxy-shaped contract (XBoard, V2Board, forks) can be targeted
+	// without hardcoding one panel's routes.
+	ConfigPath string `json:"config_path,omitempty"`
+	UserPath   string `json:"user_path,omitempty"`
+	PushPath   string `json:"push_path,omitempty"`
+	AlivePath  string `json:"alive_path,omitempty"`
+}
+
+// SyncIntervalDuration returns the configured sync interval, defaulting to 60s.
+func (p PanelConfig) SyncIntervalDuration() time.Duration {
+	if p.SyncInterval <= 0 {
+		return 60 * time.Second
+	}
+	return time.Duration(p.SyncInterval) * time.Second
+}
+
+// NodeEntry is a single node this agent instance should run, with local
+// overrides layered on top of whatever the panel reports for NodeID.
+type NodeEntry struct {
+	NodeID   int64  `json:"node_id"`
+	NodeType string `json:"node_type"`
+	Enabled  bool   `json:"enabled"`
+
+	ListenIP string `json:"listen_ip,omitempty"`
+
+	CertMode string `json:"cert_mode,omitempty"` // none|http|dns|self
+	CertFile string `json:"cert_file,omitempty"`
+	KeyFile  string `json:"key_file,omitempty"`
+
+	TFO      bool `json:"tfo,omitempty"`
+	Sniffing bool `json:"sniffing,omitempty"`
+
+	Limits NodeLimits `json:"limits,omitempty"`
+}
+
+// NodeLimits holds global defaults that apply unless the panel overrides
+// them per-user.
+type NodeLimits struct {
+	DefaultSpeedLimitBytes uint64 `json:"default_speed_limit_bytes,omitempty"`
+	DeviceLimit            int    `json:"device_limit,omitempty"`
+	IPLimit                int    `json:"ip_limit,omitempty"`
+	TrafficResetDay        int    `json:"traffic_reset_day,omitempty"` // day-of-month, 0 = panel default
+}
+
+var validNodeTypes = map[string]bool{
+	"shadowsocks": true, "vmess": true, "vless": true, "trojan": true,
+	"hysteria": true, "hysteria2": true, "tuic": true, "socks5": true,
+	"naive": true, "http": true, "mieru": true, "anytls": true,
+}
+
+var validCertModes = map[string]bool{"": true, "none": true, "http": true, "dns": true, "self": true}
+
+var validLogLevels = map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+
+// Load reads and validates a config file from path.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: read %s: %w", path, err)
+	}
+	var c Config
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("config: parse %s: %w", path, err)
+	}
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// Validate checks the config for structural and semantic errors, returning
+// the first problem found.
+func (c *Config) Validate() error {
+	if c.Log.Level == "" {
+		c.Log.Level = "info"
+	}
+	if !validLogLevels[c.Log.Level] {
+		return fmt.Errorf("config: invalid log.level %q", c.Log.Level)
+	}
+	if c.Log.Output == "" {
+		c.Log.Output = "stdout"
+	}
+
+	if c.Panel.ApiHost == "" {
+		return fmt.Errorf("config: panel.api_host is required")
+	}
+	if c.Panel.ApiKey == "" {
+		return fmt.Errorf("config: panel.api_key is required")
+	}
+	if c.Panel.ConfigPath == "" {
+		c.Panel.ConfigPath = "/api/v1/server/UniProxy/config"
+	}
+	if c.Panel.UserPath == "" {
+		c.Panel.UserPath = "/api/v1/server/UniProxy/user"
+	}
+	if c.Panel.PushPath == "" {
+		c.Panel.PushPath = "/api/v1/server/UniProxy/push"
+	}
+	if c.Panel.AlivePath == "" {
+		c.Panel.AlivePath = "/api/v1/server/UniProxy/alive"
+	}
+
+	if len(c.Nodes) == 0 {
+		return fmt.Errorf("config: at least one entry in nodes is required")
+	}
+	seen := map[int64]bool{}
+	for i, n := range c.Nodes {
+		if n.NodeID == 0 {
+			return fmt.Errorf("config: nodes[%d].node_id is required", i)
+		}
+		if seen[n.NodeID] {
+			return fmt.Errorf("config: nodes[%d]: duplicate node_id %d", i, n.NodeID)
+		}
+		seen[n.NodeID] = true
+		if !validNodeTypes[n.NodeType] {
+			return fmt.Errorf("config: nodes[%d]: invalid node_type %q", i, n.NodeType)
+		}
+		if !validCertModes[n.CertMode] {
+			return fmt.Errorf("config: nodes[%d]: invalid cert_mode %q", i, n.CertMode)
+		}
+		if n.CertMode == "self" && (n.CertFile == "" || n.KeyFile == "") {
+			return fmt.Errorf("config: nodes[%d]: cert_mode \"self\" requires cert_file and key_file", i)
+		}
+	}
+	return nil
+}
