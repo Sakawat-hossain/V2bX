@@ -5,14 +5,14 @@ package panel
 // (XBoard, V2Board, and compatible forks): protocol type, listen settings,
 // and any protocol-specific options the panel wants to push down.
 type NodeConfigResponse struct {
-	NodeID   int64          `json:"node_id"`
-	NodeType string         `json:"node_type"`
-	Port     int            `json:"port"`
-	Cipher   string         `json:"cipher,omitempty"`
+	NodeID   int64  `json:"node_id"`
+	NodeType string `json:"node_type"`
+	Port     int    `json:"port"`
+	Cipher   string `json:"cipher,omitempty"`
 
-	Host       string         `json:"host,omitempty"`
-	ServerName string         `json:"server_name,omitempty"`
-	TLS        int            `json:"tls,omitempty"` // 0=none 1=tls 2=reality/xtls, panel-defined
+	Host            string         `json:"host,omitempty"`
+	ServerName      string         `json:"server_name,omitempty"`
+	TLS             int            `json:"tls,omitempty"` // 0=none 1=tls 2=reality/xtls, panel-defined
 	NetworkSettings map[string]any `json:"network_settings,omitempty"`
 
 	// Raw carries any fields the panel sends that this client doesn't model

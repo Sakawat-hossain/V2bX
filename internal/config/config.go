@@ -10,9 +10,9 @@ import (
 
 // Config is the top-level agent configuration, loaded from config.json.
 type Config struct {
-	Log   LogConfig    `json:"log"`
-	Panel PanelConfig  `json:"panel"`
-	Nodes []NodeEntry  `json:"nodes"`
+	Log   LogConfig   `json:"log"`
+	Panel PanelConfig `json:"panel"`
+	Nodes []NodeEntry `json:"nodes"`
 }
 
 // LogConfig controls agent-wide logging.

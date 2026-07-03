@@ -30,10 +30,10 @@ func init() {
 }
 
 var classicMethods = map[string]bool{
-	"aes-128-gcm":             true,
-	"aes-192-gcm":             true,
-	"aes-256-gcm":             true,
-	"chacha20-ietf-poly1305":  true,
+	"aes-128-gcm":            true,
+	"aes-192-gcm":            true,
+	"aes-256-gcm":            true,
+	"chacha20-ietf-poly1305": true,
 }
 
 var method2022 = map[string]bool{

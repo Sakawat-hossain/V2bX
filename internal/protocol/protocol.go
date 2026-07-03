@@ -11,11 +11,11 @@ import (
 
 // User is a single subscriber assigned to a node, as delivered by the panel.
 type User struct {
-	ID         int64  `json:"id"`
-	UUID       string `json:"uuid"`
-	Password   string `json:"password"`
-	SpeedLimit uint64 `json:"speed_limit_bytes"` // bytes/sec, 0 = unlimited
-	DeviceLimit int   `json:"device_limit"`      // 0 = unlimited
+	ID          int64  `json:"id"`
+	UUID        string `json:"uuid"`
+	Password    string `json:"password"`
+	SpeedLimit  uint64 `json:"speed_limit_bytes"` // bytes/sec, 0 = unlimited
+	DeviceLimit int    `json:"device_limit"`      // 0 = unlimited
 }
 
 // TLSConfig describes how a node terminates TLS, independent of protocol.
@@ -37,10 +37,10 @@ type NodeConfig struct {
 	Cipher string // shadowsocks cipher method, ignored otherwise
 	Users  []User
 
-	TLS       TLSConfig
-	Sniffing  bool
-	TFO       bool
-	Fallback  []FallbackRule
+	TLS      TLSConfig
+	Sniffing bool
+	TFO      bool
+	Fallback []FallbackRule
 
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
