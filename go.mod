@@ -4,13 +4,16 @@ go 1.25.0
 
 require (
 	github.com/anytls/sing-anytls v0.0.11
+	github.com/coder/websocket v1.8.15
 	github.com/enfein/mieru/v3 v3.34.0
 	github.com/gofrs/uuid/v5 v5.3.2
+	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691
 	github.com/sagernet/sing v0.8.0-beta.10
 	github.com/sagernet/sing-quic v0.6.1
 	github.com/sagernet/sing-shadowsocks v0.2.9
 	github.com/sagernet/sing-vmess v0.2.7
 	golang.org/x/net v0.56.0
+	golang.org/x/time v0.15.0
 	google.golang.org/protobuf v1.34.2
 )
 
@@ -23,11 +26,9 @@ require (
 	github.com/metacubex/utls v1.7.3 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/sagernet/quic-go v0.59.0-sing-box-mod.2 // indirect
-	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )

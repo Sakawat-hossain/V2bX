@@ -11,10 +11,14 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/sagernet/reality"
 	svless "github.com/sagernet/sing-vmess/vless"
 	"github.com/sagernet/sing/common/auth"
@@ -45,6 +49,7 @@ type Server struct {
 	online   online.Tracker
 	limits   ratelimit.Store
 	reality  *reality.Config
+	httpSrv  *http.Server // set when the transport is WebSocket
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -74,6 +79,11 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	service := buildVLessService(s, cfg.Users)
 
+	isWS := strings.EqualFold(cfg.Transport, "ws")
+	if isWS && cfg.Reality != nil {
+		return fmt.Errorf("vless: node %d: reality and ws transport are mutually exclusive", cfg.NodeID)
+	}
+
 	// Reality replaces the TLS layer: it does its own handshake on the raw
 	// TCP connection (impersonating a real site), so the listener stays plain.
 	var realityCfg *reality.Config
@@ -93,14 +103,14 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		// Reality handles the handshake per-connection in acceptLoop.
 		ln, err = net.Listen("tcp", addr)
 	case tlsWanted(cfg.TLS):
-		// VLESS terminates TLS itself when a cert mode/cert is provided.
+		// Terminate TLS ourselves (WSS, or plain VLESS-TLS) when a cert is set.
 		certs, certErr := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 		if certErr != nil {
 			return fmt.Errorf("vless: node %d: %w", cfg.NodeID, certErr)
 		}
 		ln, err = tls.Listen("tcp", addr, &tls.Config{Certificates: certs})
 	default:
-		// Plaintext (behind a fronting TLS proxy).
+		// Plaintext — for WS, this is the CDN-fronted case (the CDN does TLS).
 		ln, err = net.Listen("tcp", addr)
 	}
 	if err != nil {
@@ -114,8 +124,55 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.reality = realityCfg
 	s.limits.Update(cfg.Users)
 
-	go s.acceptLoop(ln)
+	if isWS {
+		path := cfg.WSPath
+		if path == "" {
+			path = "/"
+		}
+		mux := http.NewServeMux()
+		mux.HandleFunc(path, s.handleWS)
+		s.httpSrv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+		go s.httpSrv.Serve(ln)
+	} else {
+		go s.acceptLoop(ln)
+	}
 	return nil
+}
+
+// handleWS upgrades an HTTP request to WebSocket and feeds the resulting
+// stream to the VLESS codec. Used when the node sits behind a CDN or a
+// WS-terminating front.
+func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	svc := s.service
+	s.mu.Unlock()
+	if svc == nil {
+		http.Error(w, "", http.StatusServiceUnavailable)
+		return
+	}
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		return
+	}
+	ctx := context.Background()
+	conn := websocket.NetConn(ctx, c, websocket.MessageBinary)
+	// r.RemoteAddr is the peer; behind a CDN that's the CDN's IP.
+	s.serveConn(ctx, conn, M.ParseSocksaddr(r.RemoteAddr), svc, nil)
+}
+
+// serveConn runs one accepted stream through the (optional) Reality handshake
+// and then the VLESS codec. Shared by the TCP accept loop and the WS handler.
+func (s *Server) serveConn(ctx context.Context, conn net.Conn, source M.Socksaddr, svc *svless.Service[int64], rc *reality.Config) {
+	defer conn.Close()
+	stream := conn
+	if rc != nil {
+		rconn, err := realityutil.ServerHandshake(ctx, conn, rc)
+		if err != nil {
+			return
+		}
+		stream = rconn
+	}
+	svc.NewConnection(ctx, stream, source, func(error) {})
 }
 
 // tlsWanted reports whether a VLESS node should terminate TLS itself.
@@ -154,22 +211,7 @@ func (s *Server) acceptLoop(ln net.Listener) {
 			conn.Close()
 			continue
 		}
-		go func() {
-			defer conn.Close()
-			ctx := context.Background()
-			stream := net.Conn(conn)
-			if rc != nil {
-				// Reality authenticates the client (or transparently serves a
-				// probe the decoy site and returns an error). Only authorized
-				// clients reach the VLESS layer.
-				rconn, err := realityutil.ServerHandshake(ctx, conn, rc)
-				if err != nil {
-					return
-				}
-				stream = rconn
-			}
-			svc.NewConnection(ctx, stream, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
-		}()
+		go s.serveConn(context.Background(), conn, M.SocksaddrFromNet(conn.RemoteAddr()), svc, rc)
 	}
 }
 
@@ -178,6 +220,10 @@ func (s *Server) Stop() error {
 	defer s.mu.Unlock()
 	if s.listener == nil {
 		return nil
+	}
+	if s.httpSrv != nil {
+		s.httpSrv.Close()
+		s.httpSrv = nil
 	}
 	err := s.listener.Close()
 	s.listener = nil

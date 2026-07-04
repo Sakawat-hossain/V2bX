@@ -91,6 +91,11 @@ type NodeEntry struct {
 	// dropped, so probes see a real site. Empty = drop.
 	Fallback string `json:"fallback,omitempty"`
 
+	// Transport / WSPath override the VLESS stream transport ("tcp" or "ws")
+	// and WebSocket path when the panel doesn't supply them.
+	Transport string `json:"transport,omitempty"`
+	WSPath    string `json:"ws_path,omitempty"`
+
 	Limits NodeLimits `json:"limits,omitempty"`
 }
 

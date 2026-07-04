@@ -64,6 +64,21 @@ Generate the keypair with `v2bx x25519` — put the **private** key here and the
 `server_names`, and `private_key` — a partial config is **rejected** rather
 than served as a detectable handshake.
 
+### VLESS-WebSocket (CDN fronting)
+
+Set `transport: "ws"` (and `ws_path`, e.g. `/vless`) — usually supplied by the
+panel's `network`/`networkSettings` — to run VLESS over WebSocket. This is the
+resilience play: point a CDN (e.g. Cloudflare) at the node so clients connect
+to the CDN's hard-to-block IPs and the CDN forwards to you.
+
+- With a `cert_mode`/cert set, the node terminates TLS itself (WSS).
+- Without, it serves plain WS — the **CDN terminates TLS** and forwards plain
+  WS to the node. Bind to localhost or a private interface in that case.
+- `reality` and `ws` are mutually exclusive (Reality is its own transport).
+
+Note: behind a CDN the client IP the node sees is the CDN's; per-user online
+IPs reflect that unless the CDN passes the real IP through a header.
+
 **Deploy carefully.** A wrong Reality config is a stable fingerprint that gets
 every IP sharing it blocked at once. Pick a `dest` that is popular, allows TLS
 1.3 + HTTP/2, and is *not* behind the same CDN as many other proxies; make

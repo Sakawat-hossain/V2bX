@@ -66,6 +66,12 @@ type NodeConfig struct {
 	// a probe sees a real site rather than a proxy that resets. Empty = drop.
 	FallbackAddr string
 
+	// Transport selects the stream transport for VLESS: "" / "tcp" (default)
+	// or "ws" (WebSocket, e.g. to sit behind a CDN). WSPath is the WebSocket
+	// path, e.g. "/vless".
+	Transport string
+	WSPath    string
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 

@@ -19,7 +19,8 @@ type NodeConfigResponse struct {
 
 	Host       string `json:"host,omitempty"`
 	ServerName string `json:"server_name,omitempty"`
-	TLS        int    `json:"tls,omitempty"` // 0=none 1=tls 2=reality/xtls, panel-defined
+	TLS        int    `json:"tls,omitempty"`     // 0=none 1=tls 2=reality/xtls, panel-defined
+	Network    string `json:"network,omitempty"` // tcp|ws|grpc — VLESS/VMess transport
 
 	// Hysteria/Hysteria2 knobs the panel pushes down. UpMbps/DownMbps drive
 	// the Brutal congestion control (0 = client-decides); Obfs is the
@@ -36,6 +37,17 @@ type NodeConfigResponse struct {
 		PushInterval int `json:"push_interval"`
 		PullInterval int `json:"pull_interval"`
 	} `json:"base_config"`
+}
+
+// WSPath returns the WebSocket path from the panel's network settings, if any.
+func (r NodeConfigResponse) WSPath() string {
+	if r.NetworkSettings == nil {
+		return ""
+	}
+	if p, ok := r.NetworkSettings["path"].(string); ok {
+		return p
+	}
+	return ""
 }
 
 // ListenPort returns the port the node should listen on, preferring the
