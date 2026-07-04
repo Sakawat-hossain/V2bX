@@ -193,13 +193,15 @@ func TestWrongPasswordDropped(t *testing.T) {
 	}
 }
 
-func TestMissingTLSConfigRejected(t *testing.T) {
+func TestMissingTLSAutoGeneratesCert(t *testing.T) {
 	srv := New()
 	cfg := protocol.NodeConfig{
-		NodeID: 3, Port: freePort(t),
+		NodeID: 3, ListenIP: "127.0.0.1", Port: freePort(t),
 		Users: []protocol.User{{ID: 1, Password: "x"}},
 	}
-	if err := srv.Start(cfg); err == nil {
-		t.Fatal("expected error for missing TLS cert/key")
+	// No cert/key provided — a self-signed cert is generated, so the node starts.
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("expected node to start with an auto-generated cert, got: %v", err)
 	}
+	srv.Stop()
 }

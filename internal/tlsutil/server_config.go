@@ -17,17 +17,13 @@ type StdServerConfig struct {
 	config *tls.Config
 }
 
-// NewStdServerConfig loads a certificate/key pair and returns a ready-to-use
-// ServerConfig for QUIC-based listeners.
-func NewStdServerConfig(certFile, keyFile string, nextProtos []string) (*StdServerConfig, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
+// NewServerConfig wraps resolved certificates into a ServerConfig for
+// QUIC-based listeners.
+func NewServerConfig(certs []tls.Certificate, nextProtos []string) *StdServerConfig {
 	return &StdServerConfig{config: &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates: certs,
 		NextProtos:   nextProtos,
-	}}, nil
+	}}
 }
 
 func (c *StdServerConfig) ServerName() string              { return "" }

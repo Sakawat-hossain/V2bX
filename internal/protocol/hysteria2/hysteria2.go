@@ -18,6 +18,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
+	"github.com/Sakawat-hossain/V2bX/internal/certutil"
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
@@ -66,14 +67,11 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	if len(cfg.Users) == 0 {
 		return fmt.Errorf("hysteria2: node %d has no users configured", cfg.NodeID)
 	}
-	if cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
-		return fmt.Errorf("hysteria2: node %d requires tls cert_file/key_file", cfg.NodeID)
-	}
-
-	tlsConfig, err := tlsutil.NewStdServerConfig(cfg.TLS.CertFile, cfg.TLS.KeyFile, []string{"h3"})
+	certs, err := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 	if err != nil {
-		return fmt.Errorf("hysteria2: node %d: load cert: %w", cfg.NodeID, err)
+		return fmt.Errorf("hysteria2: node %d: %w", cfg.NodeID, err)
 	}
+	tlsConfig := tlsutil.NewServerConfig(certs, []string{"h3"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	service, err := hy2.NewService[int64](hy2.ServiceOptions{

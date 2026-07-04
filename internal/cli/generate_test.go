@@ -38,10 +38,10 @@ func TestGenerateWritesValidConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 
 	// panel URL, key, then a shadowsocks node (no TLS) and a trojan node
-	// (forces a cert), then stop.
+	// (TLS with an explicit cert), then stop.
 	answers := "https://panel.example.com\nsecret\n" +
 		"1\n1\n\n\n\ny\n" + // node 1: id, protocol=shadowsocks, listen, TLS=no, enable, add another
-		"2\ntrojan\n\n\n/tmp/c.crt\n/tmp/c.key\n\nn\n" // node 2: id, protocol=trojan, listen, certmode=self, cert, key, enable, stop
+		"2\ntrojan\n\n/tmp/c.crt\n/tmp/c.key\n\nn\n" // node 2: id, protocol=trojan, listen, certfile, keyfile, enable, stop
 
 	feedStdin(t, answers, func() {
 		if err := Generate(path); err != nil {

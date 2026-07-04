@@ -180,9 +180,8 @@ func (c *Config) Validate() error {
 		if !validCertModes[n.CertMode] {
 			return fmt.Errorf("config: nodes[%d]: invalid cert_mode %q", i, n.CertMode)
 		}
-		if n.CertMode == "self" && (n.CertFile == "" || n.KeyFile == "") {
-			return fmt.Errorf("config: nodes[%d]: cert_mode \"self\" requires cert_file and key_file", i)
-		}
+		// cert_file/key_file are optional: when omitted, a self-signed
+		// certificate is generated at runtime.
 	}
 	return nil
 }

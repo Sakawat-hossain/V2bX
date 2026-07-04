@@ -65,9 +65,11 @@ sync — the fields below are agent-side overrides layered on top.
 | `node_type`  | string  | yes      | One of: `shadowsocks`, `vmess`, `vless`, `trojan`, `hysteria`, `hysteria2`, `tuic`, `socks5`, `naive`, `http`, `mieru`, `anytls`. |
 | `enabled`    | bool    | no       | Set `false` to keep the entry in the file but not run it. |
 | `listen_ip`  | string  | no       | Interface to bind, e.g. `0.0.0.0` or `127.0.0.1`. Defaults to all interfaces. |
-| `cert_mode`  | string  | no       | `none`, `http` (HTTP-01), `dns` (DNS-01), or `self` (bring your own cert). Ignored by protocols that don't use TLS. |
-| `cert_file`  | string  | when `cert_mode=self` | Path to a PEM certificate. |
-| `key_file`   | string  | when `cert_mode=self` | Path to the matching PEM private key. |
+| `cert_mode`  | string  | no       | `none`, `http`, `dns`, or `self`. Selects whether the node terminates TLS. Ignored by protocols that don't use TLS. |
+| `cert_file`  | string  | no       | Path to a PEM certificate. **Optional** — if omitted (with `key_file`), V2bX generates a self-signed certificate at runtime. |
+| `key_file`   | string  | no       | Path to the matching PEM private key. |
+
+> **Certificates are optional.** For a TLS/QUIC node (Trojan, Hysteria, Hysteria2, TUIC, AnyTLS, Naive, or VLESS with a `cert_mode`), leaving `cert_file`/`key_file` blank makes V2bX generate a self-signed certificate in memory — matching the common self-signed + client-`insecure` deployment. Provide files when you have a real (e.g. Let's Encrypt) certificate.
 | `tfo`        | bool    | no       | Enable TCP Fast Open where supported. |
 | `sniffing`   | bool    | no       | Enable destination sniffing (SNI/HTTP Host) where supported. |
 | `limits`     | object  | no       | See [Limits](#limits). |

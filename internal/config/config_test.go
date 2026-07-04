@@ -67,13 +67,15 @@ func TestLoadDuplicateNodeID(t *testing.T) {
 	}
 }
 
-func TestLoadSelfCertRequiresFiles(t *testing.T) {
+func TestLoadSelfCertWithoutFilesIsAllowed(t *testing.T) {
+	// cert_file/key_file are optional now — a self-signed cert is generated
+	// at runtime when they're omitted.
 	path := writeTemp(t, `{
 		"panel": {"api_host": "https://panel.example.com", "api_key": "secret"},
 		"nodes": [{"node_id": 1, "node_type": "trojan", "cert_mode": "self"}]
 	}`)
-	if _, err := Load(path); err == nil {
-		t.Fatal("expected error for self cert_mode without cert/key files")
+	if _, err := Load(path); err != nil {
+		t.Fatalf("self cert_mode without files should be allowed: %v", err)
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
+	"github.com/Sakawat-hossain/V2bX/internal/certutil"
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
@@ -87,13 +88,9 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	if len(cfg.Users) == 0 {
 		return fmt.Errorf("anytls: node %d has no users configured", cfg.NodeID)
 	}
-	if cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
-		return fmt.Errorf("anytls: node %d requires tls cert_file/key_file", cfg.NodeID)
-	}
-
-	cert, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+	certs, err := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 	if err != nil {
-		return fmt.Errorf("anytls: node %d: load cert: %w", cfg.NodeID, err)
+		return fmt.Errorf("anytls: node %d: %w", cfg.NodeID, err)
 	}
 
 	service, usersByName, err := buildAnyTLSService(s, cfg.Users)
@@ -102,7 +99,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	}
 
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
-	ln, err := tls.Listen("tcp", addr, &tls.Config{Certificates: []tls.Certificate{cert}})
+	ln, err := tls.Listen("tcp", addr, &tls.Config{Certificates: certs})
 	if err != nil {
 		return fmt.Errorf("anytls: node %d: listen %s: %w", cfg.NodeID, addr, err)
 	}

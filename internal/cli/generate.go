@@ -104,9 +104,10 @@ func promptNode(in *bufio.Scanner) (config.NodeEntry, error) {
 		wantTLS = askYesNo(in, "  Configure TLS for this node?", false)
 	}
 	if wantTLS {
-		e.CertMode = askChoice(in, "  Cert mode", []string{"self", "http", "dns"}, "self")
-		if e.CertMode == "self" {
-			e.CertFile = askRequired(in, "  Certificate file path (PEM)")
+		e.CertMode = "self"
+		fmt.Println("  Provide a certificate, or leave both blank to auto-generate a self-signed one.")
+		e.CertFile = ask(in, "  Certificate file path (PEM)", "")
+		if e.CertFile != "" {
 			e.KeyFile = askRequired(in, "  Private key file path (PEM)")
 		}
 	} else {

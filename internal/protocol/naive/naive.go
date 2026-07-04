@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/http2"
 
+	"github.com/Sakawat-hossain/V2bX/internal/certutil"
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
@@ -86,18 +87,14 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	if len(cfg.Users) == 0 {
 		return fmt.Errorf("naive: node %d has no users configured", cfg.NodeID)
 	}
-	if cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
-		return fmt.Errorf("naive: node %d requires tls cert_file/key_file", cfg.NodeID)
-	}
-
-	cert, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+	certs, err := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 	if err != nil {
-		return fmt.Errorf("naive: node %d: load cert: %w", cfg.NodeID, err)
+		return fmt.Errorf("naive: node %d: %w", cfg.NodeID, err)
 	}
 
 	users := buildAuthUsers(cfg.Users)
 
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+	tlsConfig := &tls.Config{Certificates: certs}
 	httpSrv := &http.Server{Handler: http.HandlerFunc(s.handleConnect)}
 	if err := http2.ConfigureServer(httpSrv, &http2.Server{}); err != nil {
 		return fmt.Errorf("naive: node %d: configure h2: %w", cfg.NodeID, err)

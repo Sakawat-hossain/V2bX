@@ -21,6 +21,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
+	"github.com/Sakawat-hossain/V2bX/internal/certutil"
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
@@ -73,12 +74,15 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	var ln net.Listener
 	var err error
-	if cfg.TLS.CertFile != "" && cfg.TLS.KeyFile != "" {
-		cert, certErr := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+	// VLESS may run plaintext (behind a fronting TLS proxy) or terminate TLS
+	// itself. Terminate TLS when a cert mode is chosen or a cert is provided;
+	// otherwise stay plaintext.
+	if tlsWanted(cfg.TLS) {
+		certs, certErr := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 		if certErr != nil {
-			return fmt.Errorf("vless: node %d: load cert: %w", cfg.NodeID, certErr)
+			return fmt.Errorf("vless: node %d: %w", cfg.NodeID, certErr)
 		}
-		ln, err = tls.Listen("tcp", addr, &tls.Config{Certificates: []tls.Certificate{cert}})
+		ln, err = tls.Listen("tcp", addr, &tls.Config{Certificates: certs})
 	} else {
 		ln, err = net.Listen("tcp", addr)
 	}
@@ -94,6 +98,14 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	go s.acceptLoop(ln)
 	return nil
+}
+
+// tlsWanted reports whether a VLESS node should terminate TLS itself.
+func tlsWanted(t protocol.TLSConfig) bool {
+	if t.CertFile != "" && t.KeyFile != "" {
+		return true
+	}
+	return t.Mode != "" && t.Mode != "none"
 }
 
 func buildVLessService(handler svless.Handler, users []protocol.User) *svless.Service[int64] {

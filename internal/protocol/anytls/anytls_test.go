@@ -171,10 +171,11 @@ func TestStartStopAndRelay(t *testing.T) {
 	}
 }
 
-func TestStartMissingTLS(t *testing.T) {
+func TestStartMissingTLSAutoGenerates(t *testing.T) {
 	srv := New()
-	cfg := protocol.NodeConfig{NodeID: 2, Port: freePort(t), Users: []protocol.User{{ID: 1, Password: "x"}}}
-	if err := srv.Start(cfg); err == nil {
-		t.Fatal("expected error for missing TLS cert/key")
+	cfg := protocol.NodeConfig{NodeID: 2, ListenIP: "127.0.0.1", Port: freePort(t), Users: []protocol.User{{ID: 1, Password: "x"}}}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("expected node to start with an auto-generated cert, got: %v", err)
 	}
+	srv.Stop()
 }
