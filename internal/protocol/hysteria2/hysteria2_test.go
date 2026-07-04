@@ -218,6 +218,102 @@ func TestStartWithBandwidthRelays(t *testing.T) {
 	}
 }
 
+func TestStartWithSalamanderRelays(t *testing.T) {
+	certFile, keyFile := generateSelfSigned(t)
+	port := freePort(t)
+
+	srv := New()
+	cfg := protocol.NodeConfig{
+		NodeID: 6, ListenIP: "127.0.0.1", Port: port,
+		Users: []protocol.User{{ID: 1, Password: "pw"}},
+		TLS:   protocol.TLSConfig{CertFile: certFile, KeyFile: keyFile},
+		Obfs:  "salamander-secret",
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start with obfs: %v", err)
+	}
+	defer srv.Stop()
+
+	echo := newEchoUpstream(t)
+	defer echo.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := hy2.NewClient(hy2.ClientOptions{
+		Context:            ctx,
+		Dialer:             N.SystemDialer,
+		Logger:             logger.NOP(),
+		ServerAddress:      M.ParseSocksaddr(net.JoinHostPort("127.0.0.1", strconv.Itoa(port))),
+		ServerPorts:        []string{strconv.Itoa(port) + ":" + strconv.Itoa(port)},
+		Password:           "pw",
+		SalamanderPassword: "salamander-secret",
+		TLSConfig:          &insecureClientTLSConfig{&tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h3"}}},
+	})
+	if err != nil {
+		t.Fatalf("hy2.NewClient: %v", err)
+	}
+	defer client.CloseWithError(nil)
+
+	conn, err := client.DialConn(ctx, M.ParseSocksaddr(echo.Addr().String()))
+	if err != nil {
+		t.Fatalf("DialConn: %v", err)
+	}
+	defer conn.Close()
+
+	msg := []byte("obfuscated hello")
+	if _, err := conn.Write(msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, len(msg))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("read echo: %v", err)
+	}
+	if string(buf) != string(msg) {
+		t.Fatalf("echo mismatch: got %q want %q", buf, msg)
+	}
+}
+
+func TestSalamanderMismatchFails(t *testing.T) {
+	certFile, keyFile := generateSelfSigned(t)
+	port := freePort(t)
+
+	srv := New()
+	cfg := protocol.NodeConfig{
+		NodeID: 7, ListenIP: "127.0.0.1", Port: port,
+		Users: []protocol.User{{ID: 1, Password: "pw"}},
+		TLS:   protocol.TLSConfig{CertFile: certFile, KeyFile: keyFile},
+		Obfs:  "server-secret",
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer srv.Stop()
+
+	// Client without the obfuscation password sends plain QUIC the server
+	// can't parse, so the handshake never completes.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	client, err := hy2.NewClient(hy2.ClientOptions{
+		Context:       ctx,
+		Dialer:        N.SystemDialer,
+		Logger:        logger.NOP(),
+		ServerAddress: M.ParseSocksaddr(net.JoinHostPort("127.0.0.1", strconv.Itoa(port))),
+		ServerPorts:   []string{strconv.Itoa(port) + ":" + strconv.Itoa(port)},
+		Password:      "pw",
+		TLSConfig:     &insecureClientTLSConfig{&tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h3"}}},
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer client.CloseWithError(nil)
+
+	if _, err := client.DialConn(ctx, M.ParseSocksaddr("127.0.0.1:1")); err == nil {
+		t.Fatal("expected connection to fail without the salamander password")
+	}
+}
+
 func TestStartMissingTLSAutoGenerates(t *testing.T) {
 	srv := New()
 	cfg := protocol.NodeConfig{NodeID: 2, ListenIP: "127.0.0.1", Port: freePort(t), Users: []protocol.User{{ID: 1, Password: "x"}}}

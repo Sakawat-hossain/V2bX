@@ -81,6 +81,12 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		UDPTimeout: 300 * time.Second,
 		Handler:    s,
 	}
+	// Salamander obfuscates the QUIC handshake so a DPI classifier can't
+	// fingerprint the traffic as QUIC. The client must share the same
+	// password. Empty = plain QUIC.
+	if cfg.Obfs != "" {
+		opts.SalamanderPassword = cfg.Obfs
+	}
 	// A configured bandwidth caps the node's rate. Brutal-capable clients
 	// (which advertise a bandwidth) then get the Brutal congestion control
 	// capped to this rate — Brutal ignores packet loss, so throughput holds
