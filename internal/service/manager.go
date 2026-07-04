@@ -25,6 +25,10 @@ type Manager struct {
 
 	mu    sync.Mutex
 	nodes map[int64]*runningNode
+	// acked[nodeID][userID] is the cumulative traffic total the panel has
+	// confirmed. Deltas are computed against it and it only advances after a
+	// successful push, so a failed report is retried in full rather than lost.
+	acked map[int64]map[int64]protocol.UserTraffic
 }
 
 type runningNode struct {
@@ -57,6 +61,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Manager, error) {
 		client: client,
 		logger: logger,
 		nodes:  map[int64]*runningNode{},
+		acked:  map[int64]map[int64]protocol.UserTraffic{},
 	}, nil
 }
 
@@ -225,8 +230,11 @@ func configEqual(a, b *protocol.NodeConfig) bool {
 	return true
 }
 
-// PushStats collects Stats() from every running node and reports them to
-// the panel, resetting each server's counters.
+// PushStats reports the traffic accrued since the last acknowledged push for
+// every running node. Protocol servers keep cumulative counters; here we
+// diff against the last-acked totals and advance them only on a successful
+// push, so a transient panel failure is retried in full on the next tick
+// instead of silently dropping traffic.
 func (m *Manager) PushStats(ctx context.Context) error {
 	m.mu.Lock()
 	nodes := make([]*runningNode, 0, len(m.nodes))
@@ -236,19 +244,52 @@ func (m *Manager) PushStats(ctx context.Context) error {
 	m.mu.Unlock()
 
 	for _, rn := range nodes {
+		nodeID := rn.entry.NodeID
 		stats := rn.server.Stats()
-		if len(stats.Users) == 0 {
+
+		m.mu.Lock()
+		acked := m.acked[nodeID]
+		if acked == nil {
+			acked = map[int64]protocol.UserTraffic{}
+		}
+		next := make(map[int64]protocol.UserTraffic, len(stats.Users))
+		records := make([]panel.TrafficRecord, 0, len(stats.Users))
+		for uid, cur := range stats.Users {
+			next[uid] = cur
+			prev := acked[uid]
+			// Counters are monotonic; if a server restarted mid-run they can
+			// reset, so treat cur < prev as "start fresh from cur".
+			up := delta(cur.Upload, prev.Upload)
+			down := delta(cur.Download, prev.Download)
+			if up != 0 || down != 0 {
+				records = append(records, panel.TrafficRecord{UID: uid, Upload: up, Download: down})
+			}
+		}
+		m.mu.Unlock()
+
+		if len(records) == 0 {
 			continue
 		}
-		records := make([]panel.TrafficRecord, 0, len(stats.Users))
-		for uid, tr := range stats.Users {
-			records = append(records, panel.TrafficRecord{UID: uid, Upload: tr.Upload, Download: tr.Download})
+		if err := m.client.PushTraffic(ctx, nodeID, rn.entry.NodeType, records); err != nil {
+			// Leave acked untouched so this delta is resent next tick.
+			m.logger.Warn("push traffic failed, will retry", "node_id", nodeID, "error", err)
+			continue
 		}
-		if err := m.client.PushTraffic(ctx, rn.entry.NodeID, rn.entry.NodeType, records); err != nil {
-			m.logger.Warn("push traffic failed", "node_id", rn.entry.NodeID, "error", err)
-		}
+		// Push confirmed — advance the acknowledged totals.
+		m.mu.Lock()
+		m.acked[nodeID] = next
+		m.mu.Unlock()
 	}
 	return nil
+}
+
+// delta returns cur-prev, or cur if the counter appears to have reset
+// (cur < prev), avoiding uint64 underflow.
+func delta(cur, prev uint64) uint64 {
+	if cur < prev {
+		return cur
+	}
+	return cur - prev
 }
 
 func (m *Manager) stopAll() {

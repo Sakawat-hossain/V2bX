@@ -149,14 +149,14 @@ func (s *Server) Stop() error {
 	return err
 }
 
-// Stats returns and resets accumulated per-user traffic.
+// Stats returns cumulative per-user traffic totals (never reset).
 func (s *Server) Stats() protocol.UsageStats {
 	out := protocol.UsageStats{NodeID: s.cfg.NodeID, Users: map[int64]protocol.UserTraffic{}}
 	s.counters.Range(func(key, value any) bool {
 		id := key.(int64)
 		c := value.(*userCounter)
-		up := c.upload.Swap(0)
-		down := c.download.Swap(0)
+		up := c.upload.Load()
+		down := c.download.Load()
 		if up != 0 || down != 0 {
 			out.Users[id] = protocol.UserTraffic{Upload: up, Download: down}
 		}

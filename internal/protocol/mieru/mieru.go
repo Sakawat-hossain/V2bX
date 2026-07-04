@@ -175,7 +175,7 @@ func (s *Server) Stats() protocol.UsageStats {
 	s.counters.Range(func(key, value any) bool {
 		id := key.(int64)
 		c := value.(*userCounter)
-		up, down := c.upload.Swap(0), c.download.Swap(0)
+		up, down := c.upload.Load(), c.download.Load()
 		if up != 0 || down != 0 {
 			out.Users[id] = protocol.UserTraffic{Upload: up, Download: down}
 		}

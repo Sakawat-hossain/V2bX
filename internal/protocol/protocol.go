@@ -74,7 +74,9 @@ type ProtocolServer interface {
 	// Stop closes all listeners and releases resources. Safe to call on an
 	// already-stopped server.
 	Stop() error
-	// Stats returns traffic accrued since the last call and resets counters.
+	// Stats returns cumulative per-user traffic totals since the server
+	// started (monotonic, never reset). Callers compute deltas themselves so
+	// a failed report never loses or double-counts traffic.
 	Stats() UsageStats
 	// Name returns the protocol identifier, e.g. "shadowsocks".
 	Name() string
