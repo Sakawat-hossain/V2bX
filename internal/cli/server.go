@@ -41,16 +41,19 @@ func RunServer(configPath string) error {
 		}
 	}()
 
-	statsTicker := time.NewTicker(30 * time.Second)
-	defer statsTicker.Stop()
+	reportTicker := time.NewTicker(30 * time.Second)
+	defer reportTicker.Stop()
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-statsTicker.C:
+			case <-reportTicker.C:
 				if err := mgr.PushStats(ctx); err != nil {
 					logger.Warn("push stats failed", "error", err)
+				}
+				if err := mgr.ReportAlive(ctx); err != nil {
+					logger.Warn("report alive failed", "error", err)
 				}
 			}
 		}

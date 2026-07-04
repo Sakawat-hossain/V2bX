@@ -315,6 +315,38 @@ func delta(cur, prev uint64) uint64 {
 	return cur - prev
 }
 
+// ReportAlive tells the panel which source IPs each user is currently
+// connected from, per node, so it can enforce device/IP limits. Reporting
+// keeps the node shown as online too, alongside the /user heartbeat.
+func (m *Manager) ReportAlive(ctx context.Context) error {
+	m.mu.Lock()
+	nodes := make([]*runningNode, 0, len(m.nodes))
+	for _, rn := range m.nodes {
+		nodes = append(nodes, rn)
+	}
+	m.mu.Unlock()
+
+	for _, rn := range nodes {
+		reporter, ok := rn.server.(protocol.OnlineReporter)
+		if !ok {
+			continue
+		}
+		records := make([]panel.AliveRecord, 0)
+		for uid, ips := range reporter.Online() {
+			for _, ip := range ips {
+				records = append(records, panel.AliveRecord{UID: uid, IP: ip})
+			}
+		}
+		if len(records) == 0 {
+			continue
+		}
+		if err := m.client.ReportAlive(ctx, rn.entry.NodeID, rn.entry.NodeType, records); err != nil {
+			m.logger.Warn("report alive failed", "node_id", rn.entry.NodeID, "error", err)
+		}
+	}
+	return nil
+}
+
 func (m *Manager) stopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

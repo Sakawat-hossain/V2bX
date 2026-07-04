@@ -18,6 +18,7 @@ import (
 	"github.com/enfein/mieru/v3/pkg/appctl/appctlpb"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
@@ -37,7 +38,11 @@ type Server struct {
 	usersByName map[string]int64
 
 	counters sync.Map // int64 userID -> *userCounter
+	online   online.Tracker
 }
+
+// Online reports the source IPs each user is currently connected from.
+func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
 
 type userCounter struct {
 	upload   atomic.Uint64
@@ -122,6 +127,7 @@ func (s *Server) handle(conn net.Conn, req *model.Request) {
 	if uc, ok := conn.(apicommon.UserContext); ok {
 		userID = s.usersByName[uc.UserName()]
 	}
+	s.online.Mark(userID, online.IP(conn.RemoteAddr()))
 
 	// Only TCP CONNECT is relayed; UDP associate is declined for now.
 	if req.Command != constant.Socks5ConnectCmd {

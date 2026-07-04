@@ -18,6 +18,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
+	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 	"github.com/Sakawat-hossain/V2bX/internal/tlsutil"
@@ -36,7 +37,11 @@ type Server struct {
 	cfg        protocol.NodeConfig
 
 	counters sync.Map // int64 userID -> *userCounter
+	online   online.Tracker
 }
+
+// Online reports the source IPs each user is currently connected from.
+func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
 
 type userCounter struct {
 	upload   atomic.Uint64
@@ -148,6 +153,7 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	}
 	userID, _ := auth.UserFromContext[int64](ctx)
 	counter := s.counterFor(userID)
+	s.online.Mark(userID, online.IPString(source.String()))
 
 	upstream, err := net.Dial("tcp", destination.String())
 	if err != nil {
@@ -171,6 +177,7 @@ func (s *Server) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, s
 	}
 	userID, _ := auth.UserFromContext[int64](ctx)
 	counter := s.counterFor(userID)
+	s.online.Mark(userID, online.IPString(source.String()))
 
 	upstream, err := net.Dial("udp", destination.String())
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
@@ -48,7 +49,11 @@ type Server struct {
 	users atomic.Pointer[map[string]string]
 
 	counters sync.Map // int64 userID -> *userCounter
+	online   online.Tracker
 }
+
+// Online reports the source IPs each user is currently connected from.
+func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
 
 func buildAuthUsers(users []protocol.User) map[string]string {
 	m := make(map[string]string, len(users))
@@ -145,6 +150,7 @@ func (s *Server) handle(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	s.online.Mark(userID, online.IP(conn.RemoteAddr()))
 
 	dest, err := readConnectRequest(conn)
 	if err != nil {

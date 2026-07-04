@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/http2"
 
+	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 )
 
@@ -39,7 +40,11 @@ type Server struct {
 	users atomic.Pointer[map[string]string]
 
 	counters sync.Map // int64 userID -> *userCounter
+	online   online.Tracker
 }
+
+// Online reports the source IPs each user is currently connected from.
+func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
 
 func buildAuthUsers(users []protocol.User) map[string]string {
 	m := make(map[string]string, len(users))
@@ -161,6 +166,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusProxyAuthRequired)
 		return
 	}
+	s.online.Mark(userID, online.IPString(r.RemoteAddr))
 
 	upstream, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {

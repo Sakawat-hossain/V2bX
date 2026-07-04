@@ -82,6 +82,13 @@ type ProtocolServer interface {
 	Name() string
 }
 
+// OnlineReporter is an optional interface a ProtocolServer implements to
+// report which source IPs each user is currently connected from, so the
+// manager can forward device presence to the panel.
+type OnlineReporter interface {
+	Online() map[int64][]string
+}
+
 // UserUpdater is an optional interface a ProtocolServer can implement to
 // swap its user set live, without closing the listener or dropping active
 // connections. When a sync changes only the user list (not the port, cipher,
