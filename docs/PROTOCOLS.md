@@ -41,6 +41,35 @@ list (`User.Flow`). If `cert_mode: self` with `cert_file`/`key_file` is set
 the listener terminates TLS itself; otherwise it expects TLS to already be
 terminated in front of it. UDP-over-VLess is not yet implemented.
 
+### VLESS-Reality
+
+Add a `reality` block to a `vless` node to use the Reality transport, which
+defeats **active probing**: the node borrows a real site's TLS handshake, and
+any connection that isn't an authorized Reality client is transparently
+proxied to that real site — so a censor probing the IP finds a genuine
+website, not a proxy.
+
+```jsonc
+"reality": {
+  "dest": "www.microsoft.com:443",       // real site to impersonate (must be reachable)
+  "server_names": ["www.microsoft.com"], // SNIs to accept (valid for dest)
+  "private_key": "<base64url x25519>",    // from `v2bx x25519`; give clients the public key
+  "short_ids": ["", "0123456789abcdef"]  // hex, 0-16 chars; "" allows the empty id
+}
+```
+
+Generate the keypair with `v2bx x25519` — put the **private** key here and the
+**public** key in the panel/client. When `reality` is set the node ignores
+`cert_mode`/cert files (Reality does its own handshake) and requires `dest`,
+`server_names`, and `private_key` — a partial config is **rejected** rather
+than served as a detectable handshake.
+
+**Deploy carefully.** A wrong Reality config is a stable fingerprint that gets
+every IP sharing it blocked at once. Pick a `dest` that is popular, allows TLS
+1.3 + HTTP/2, and is *not* behind the same CDN as many other proxies; make
+`server_names` match it. **Canary on one or two IPs first** and watch them
+before rolling out fleet-wide.
+
 ## Trojan — done
 
 TLS is mandatory; only `cert_mode: self` with `cert_file`/`key_file` is

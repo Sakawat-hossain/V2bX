@@ -23,6 +23,7 @@ require (
 	github.com/metacubex/utls v1.7.3 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/sagernet/quic-go v0.59.0-sing-box-mod.2 // indirect
+	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/sys v0.46.0 // indirect

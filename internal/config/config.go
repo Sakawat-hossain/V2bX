@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 )
 
 // Config is the top-level agent configuration, loaded from config.json.
@@ -80,6 +82,9 @@ type NodeEntry struct {
 	// The agent installs an iptables redirect from the range to the node port
 	// (needs root + iptables). Empty = off.
 	PortHopRange string `json:"port_hop_range,omitempty"`
+
+	// Reality enables the VLESS-Reality transport for a vless node.
+	Reality *protocol.RealityConfig `json:"reality,omitempty"`
 
 	Limits NodeLimits `json:"limits,omitempty"`
 }
@@ -194,6 +199,22 @@ func (c *Config) Validate() error {
 		}
 		// cert_file/key_file are optional: when omitted, a self-signed
 		// certificate is generated at runtime.
+		if n.Reality != nil {
+			if n.NodeType != "vless" {
+				return fmt.Errorf("config: nodes[%d]: reality is only supported on vless nodes", i)
+			}
+			// Fail closed: a partial Reality config would serve a detectable
+			// handshake, which is worse than not enabling it at all.
+			if n.Reality.Dest == "" {
+				return fmt.Errorf("config: nodes[%d]: reality.dest is required", i)
+			}
+			if len(n.Reality.ServerNames) == 0 {
+				return fmt.Errorf("config: nodes[%d]: reality.server_names is required", i)
+			}
+			if n.Reality.PrivateKey == "" {
+				return fmt.Errorf("config: nodes[%d]: reality.private_key is required (generate with 'v2bx x25519')", i)
+			}
+		}
 	}
 	return nil
 }

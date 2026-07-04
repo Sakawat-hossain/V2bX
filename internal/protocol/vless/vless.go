@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/sagernet/reality"
 	svless "github.com/sagernet/sing-vmess/vless"
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/logger"
@@ -25,6 +26,7 @@ import (
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
+	"github.com/Sakawat-hossain/V2bX/internal/realityutil"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
@@ -42,6 +44,7 @@ type Server struct {
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
 	limits   ratelimit.Store
+	reality  *reality.Config
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -71,19 +74,33 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	service := buildVLessService(s, cfg.Users)
 
+	// Reality replaces the TLS layer: it does its own handshake on the raw
+	// TCP connection (impersonating a real site), so the listener stays plain.
+	var realityCfg *reality.Config
+	if cfg.Reality != nil {
+		var rerr error
+		realityCfg, rerr = realityutil.BuildServerConfig(cfg.Reality)
+		if rerr != nil {
+			return fmt.Errorf("vless: node %d: reality: %w", cfg.NodeID, rerr)
+		}
+	}
+
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	var ln net.Listener
 	var err error
-	// VLESS may run plaintext (behind a fronting TLS proxy) or terminate TLS
-	// itself. Terminate TLS when a cert mode is chosen or a cert is provided;
-	// otherwise stay plaintext.
-	if tlsWanted(cfg.TLS) {
+	switch {
+	case realityCfg != nil:
+		// Reality handles the handshake per-connection in acceptLoop.
+		ln, err = net.Listen("tcp", addr)
+	case tlsWanted(cfg.TLS):
+		// VLESS terminates TLS itself when a cert mode/cert is provided.
 		certs, certErr := certutil.Certificates(cfg.TLS, cfg.ListenIP)
 		if certErr != nil {
 			return fmt.Errorf("vless: node %d: %w", cfg.NodeID, certErr)
 		}
 		ln, err = tls.Listen("tcp", addr, &tls.Config{Certificates: certs})
-	} else {
+	default:
+		// Plaintext (behind a fronting TLS proxy).
 		ln, err = net.Listen("tcp", addr)
 	}
 	if err != nil {
@@ -94,6 +111,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.service = service
 	s.cfg = cfg
+	s.reality = realityCfg
 	s.limits.Update(cfg.Users)
 
 	go s.acceptLoop(ln)
@@ -130,6 +148,7 @@ func (s *Server) acceptLoop(ln net.Listener) {
 		}
 		s.mu.Lock()
 		svc := s.service
+		rc := s.reality
 		s.mu.Unlock()
 		if svc == nil {
 			conn.Close()
@@ -138,7 +157,18 @@ func (s *Server) acceptLoop(ln net.Listener) {
 		go func() {
 			defer conn.Close()
 			ctx := context.Background()
-			svc.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
+			stream := net.Conn(conn)
+			if rc != nil {
+				// Reality authenticates the client (or transparently serves a
+				// probe the decoy site and returns an error). Only authorized
+				// clients reach the VLESS layer.
+				rconn, err := realityutil.ServerHandshake(ctx, conn, rc)
+				if err != nil {
+					return
+				}
+				stream = rconn
+			}
+			svc.NewConnection(ctx, stream, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
 		}()
 	}
 }

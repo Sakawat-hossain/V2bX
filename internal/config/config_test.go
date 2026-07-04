@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,36 @@ func writeTemp(t *testing.T, content string) string {
 		t.Fatalf("write temp config: %v", err)
 	}
 	return path
+}
+
+func TestRealityFailsClosed(t *testing.T) {
+	base := `{
+		"panel": {"api_host": "https://p.example.com", "api_key": "k"},
+		"nodes": [{"node_id": 1, "node_type": "vless", "enabled": true, "reality": %s}]
+	}`
+	// Missing required fields must be rejected.
+	for _, reality := range []string{
+		`{"server_names":["a.com"],"private_key":"x"}`,  // no dest
+		`{"dest":"a.com:443","private_key":"x"}`,        // no server_names
+		`{"dest":"a.com:443","server_names":["a.com"]}`, // no private_key
+	} {
+		if _, err := Load(writeTemp(t, fmt.Sprintf(base, reality))); err == nil {
+			t.Errorf("expected fail-closed error for reality %s", reality)
+		}
+	}
+	// A complete Reality block loads.
+	full := `{"dest":"a.com:443","server_names":["a.com"],"private_key":"AAAA"}`
+	if _, err := Load(writeTemp(t, fmt.Sprintf(base, full))); err != nil {
+		t.Fatalf("complete reality config rejected: %v", err)
+	}
+	// Reality on a non-vless node is rejected.
+	nonVless := `{
+		"panel": {"api_host": "https://p.example.com", "api_key": "k"},
+		"nodes": [{"node_id": 1, "node_type": "trojan", "enabled": true, "reality": {"dest":"a.com:443","server_names":["a.com"],"private_key":"AAAA"}}]
+	}`
+	if _, err := Load(writeTemp(t, nonVless)); err == nil {
+		t.Fatal("expected error: reality only on vless")
+	}
 }
 
 func TestLoadValidConfig(t *testing.T) {

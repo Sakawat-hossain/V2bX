@@ -57,6 +57,9 @@ type NodeConfig struct {
 	// nodes: the host redirects the range to the listen port. Empty = off.
 	PortHopRange string
 
+	// Reality, when set, makes a VLESS node use the Reality transport.
+	Reality *RealityConfig
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 
@@ -65,6 +68,24 @@ type FallbackRule struct {
 	SNI  string `json:"sni,omitempty"`
 	Path string `json:"path,omitempty"`
 	Dest string `json:"dest"`
+}
+
+// RealityConfig configures VLESS-Reality: the node borrows a real site's TLS
+// handshake to defeat active probing. Every field is required when Reality is
+// enabled — a partial config is rejected (fail closed) rather than served as
+// a detectable handshake.
+type RealityConfig struct {
+	// Dest is the real site the node impersonates and proxies probes to,
+	// e.g. "www.microsoft.com:443". Must be reachable from the node.
+	Dest string `json:"dest"`
+	// ServerNames are the SNIs the node will accept (must be valid for Dest).
+	ServerNames []string `json:"server_names"`
+	// PrivateKey is the base64url x25519 private key (pair a public key to
+	// clients). Generate with `v2bx x25519`.
+	PrivateKey string `json:"private_key"`
+	// ShortIDs are hex-encoded short IDs (0–16 hex chars, even length). An
+	// empty list permits the empty short ID.
+	ShortIDs []string `json:"short_ids,omitempty"`
 }
 
 // UsageStats reports accumulated traffic for a node, broken down per user.
