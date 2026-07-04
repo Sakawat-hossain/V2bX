@@ -39,10 +39,19 @@ type Server struct {
 	listener net.Listener
 	cfg      protocol.NodeConfig
 	// users maps hex(SHA224(password)) -> panel user ID, so a valid Trojan
-	// header identifies which subscriber to attribute traffic to.
-	users map[string]int64
+	// header identifies which subscriber to attribute traffic to. Behind an
+	// atomic pointer so it can be swapped on a live user reload.
+	users atomic.Pointer[map[string]int64]
 
 	counters sync.Map // int64 userID -> *userCounter
+}
+
+func buildTrojanUsers(users []protocol.User) map[string]int64 {
+	m := make(map[string]int64, len(users))
+	for _, u := range users {
+		m[hexSHA224(u.Password)] = u.ID
+	}
+	return m
 }
 
 type userCounter struct {
@@ -76,10 +85,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("trojan: node %d: load cert: %w", cfg.NodeID, err)
 	}
 
-	users := make(map[string]int64, len(cfg.Users))
-	for _, u := range cfg.Users {
-		users[hexSHA224(u.Password)] = u.ID
-	}
+	users := buildTrojanUsers(cfg.Users)
 
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	ln, err := tls.Listen("tcp", addr, &tls.Config{Certificates: []tls.Certificate{cert}})
@@ -89,7 +95,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	s.listener = ln
 	s.cfg = cfg
-	s.users = users
+	s.users.Store(&users)
 
 	go s.acceptLoop(ln)
 	return nil
@@ -145,7 +151,8 @@ func (s *Server) handle(conn net.Conn) {
 	if _, err := io.ReadFull(reader, hexHash); err != nil {
 		return
 	}
-	userID, ok := s.users[string(hexHash)]
+	users := s.users.Load()
+	userID, ok := (*users)[string(hexHash)]
 	if !ok {
 		return // not a valid Trojan client; drop silently rather than fingerprint ourselves
 	}
@@ -243,6 +250,13 @@ func readAddrRequest(r *bufio.Reader) (string, error) {
 	}
 	port := binary.BigEndian.Uint16(portBuf)
 	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
+}
+
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	m := buildTrojanUsers(users)
+	s.users.Store(&m)
+	return nil
 }
 
 func (s *Server) counterFor(userID int64) *userCounter {

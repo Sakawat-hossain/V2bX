@@ -35,10 +35,28 @@ type Server struct {
 	service  *anytls.Service
 	cfg      protocol.NodeConfig
 	// usersByName maps the AnyTLS username (we use the panel UUID, or the
-	// stringified user ID as a fallback) back to the panel user ID.
-	usersByName map[string]int64
+	// stringified user ID as a fallback) back to the panel user ID. Stored
+	// behind an atomic pointer so it can be swapped on a live user reload
+	// while connection handlers read it.
+	usersByName atomic.Pointer[map[string]int64]
 
 	counters sync.Map // int64 userID -> *userCounter
+}
+
+// buildAnyTLSUsers translates panel users into the sing-anytls user list and
+// the name→id lookup used for stats attribution.
+func buildAnyTLSUsers(users []protocol.User) ([]anytls.User, map[string]int64) {
+	byName := make(map[string]int64, len(users))
+	out := make([]anytls.User, 0, len(users))
+	for _, u := range users {
+		name := u.UUID
+		if name == "" {
+			name = strconv.FormatInt(u.ID, 10)
+		}
+		byName[name] = u.ID
+		out = append(out, anytls.User{Name: name, Password: u.Password})
+	}
+	return out, byName
 }
 
 type userCounter struct {
@@ -71,16 +89,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("anytls: node %d: load cert: %w", cfg.NodeID, err)
 	}
 
-	usersByName := make(map[string]int64, len(cfg.Users))
-	users := make([]anytls.User, 0, len(cfg.Users))
-	for _, u := range cfg.Users {
-		name := u.UUID
-		if name == "" {
-			name = strconv.FormatInt(u.ID, 10)
-		}
-		usersByName[name] = u.ID
-		users = append(users, anytls.User{Name: name, Password: u.Password})
-	}
+	users, usersByName := buildAnyTLSUsers(cfg.Users)
 
 	service, err := anytls.NewService(anytls.ServiceConfig{
 		PaddingScheme: padding.DefaultPaddingScheme,
@@ -101,9 +110,23 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.service = service
 	s.cfg = cfg
-	s.usersByName = usersByName
+	s.usersByName.Store(&usersByName)
 
 	go s.acceptLoop(ln, service)
+	return nil
+}
+
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.mu.Lock()
+	svc := s.service
+	s.mu.Unlock()
+	if svc == nil {
+		return fmt.Errorf("anytls: not started")
+	}
+	list, byName := buildAnyTLSUsers(users)
+	svc.UpdateUsers(list)
+	s.usersByName.Store(&byName)
 	return nil
 }
 
@@ -160,7 +183,9 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	}
 	var userID int64
 	if name, ok := auth.UserFromContext[string](ctx); ok {
-		userID = s.usersByName[name]
+		if m := s.usersByName.Load(); m != nil {
+			userID = (*m)[name]
+		}
 	}
 
 	upstream, err := net.Dial("tcp", destination.String())

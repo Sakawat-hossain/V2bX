@@ -94,6 +94,37 @@ func TestStartUnsupportedCipher(t *testing.T) {
 
 // newEchoUpstream starts a plain TCP echo server standing in for the
 // "destination" a shadowsocks client tunnels to.
+// TestUpdateUsersLive proves a user added via UpdateUsers can connect without
+// the listener being restarted (the port and existing service stay up).
+func TestUpdateUsersLive(t *testing.T) {
+	port := freePort(t)
+	srv := New()
+	cfg := protocol.NodeConfig{
+		NodeID: 1, ListenIP: "127.0.0.1", Port: port, Cipher: "aes-256-gcm",
+		Users: []protocol.User{{ID: 1, Password: "pw-a"}},
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer srv.Stop()
+
+	echo := newEchoUpstream(t)
+	defer echo.Close()
+
+	// Original user works.
+	roundTripThroughProxy(t, "127.0.0.1", port, "aes-256-gcm", "pw-a", echo.Addr().String())
+
+	// Add a second user live — no restart.
+	if err := srv.UpdateUsers([]protocol.User{{ID: 1, Password: "pw-a"}, {ID: 2, Password: "pw-b"}}); err != nil {
+		t.Fatalf("UpdateUsers: %v", err)
+	}
+
+	// The new user can now connect on the same, still-open listener.
+	roundTripThroughProxy(t, "127.0.0.1", port, "aes-256-gcm", "pw-b", echo.Addr().String())
+	// And the original user still works.
+	roundTripThroughProxy(t, "127.0.0.1", port, "aes-256-gcm", "pw-a", echo.Addr().String())
+}
+
 func newEchoUpstream(t *testing.T) net.Listener {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

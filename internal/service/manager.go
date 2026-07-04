@@ -190,8 +190,24 @@ func (m *Manager) applyNodeConfig(entry config.NodeEntry, nc *protocol.NodeConfi
 	defer m.mu.Unlock()
 
 	rn, exists := m.nodes[entry.NodeID]
-	if exists && rn.lastGood != nil && configEqual(rn.lastGood, nc) {
-		return // no change, avoid needlessly bouncing the listener
+	if exists && rn.lastGood != nil {
+		switch {
+		case configEqual(rn.lastGood, nc):
+			return // nothing changed
+		case listenerEqual(rn.lastGood, nc):
+			// Only the user set changed. Update it in place if the backend
+			// can, so active connections aren't dropped; fall back to a
+			// restart otherwise.
+			if uu, ok := rn.server.(protocol.UserUpdater); ok {
+				if err := uu.UpdateUsers(nc.Users); err != nil {
+					m.logger.Warn("live user reload failed, restarting node", "node_id", entry.NodeID, "error", err)
+					break
+				}
+				rn.lastGood = nc
+				m.logger.Info("reloaded users", "node_id", entry.NodeID, "users", len(nc.Users))
+				return
+			}
+		}
 	}
 
 	if exists {
@@ -218,8 +234,15 @@ func (m *Manager) applyNodeConfig(entry config.NodeEntry, nc *protocol.NodeConfi
 		"listen", fmt.Sprintf("%s:%d", nc.ListenIP, nc.Port), "users", len(nc.Users))
 }
 
+// listenerEqual reports whether the listener-level config (everything that
+// requires rebinding the socket) is unchanged between a and b. When true, a
+// difference must be purely in the user set.
+func listenerEqual(a, b *protocol.NodeConfig) bool {
+	return a.Port == b.Port && a.Cipher == b.Cipher && a.TLS == b.TLS
+}
+
 func configEqual(a, b *protocol.NodeConfig) bool {
-	if a.Port != b.Port || a.Cipher != b.Cipher || len(a.Users) != len(b.Users) {
+	if !listenerEqual(a, b) || len(a.Users) != len(b.Users) {
 		return false
 	}
 	for i := range a.Users {

@@ -29,9 +29,28 @@ type Server struct {
 	mu       sync.Mutex
 	listener net.Listener
 	cfg      protocol.NodeConfig
-	users    map[string]string // username -> password from Proxy-Authorization; empty = no auth
+	// users maps username -> password (HTTP Basic Proxy-Authorization);
+	// empty = no auth. Behind an atomic pointer for live user reloads.
+	users atomic.Pointer[map[string]string]
 
 	counters sync.Map // int64 userID -> *userCounter
+}
+
+func buildAuthUsers(users []protocol.User) map[string]string {
+	m := make(map[string]string, len(users))
+	for _, u := range users {
+		if u.UUID != "" {
+			m[u.UUID] = u.Password
+		}
+	}
+	return m
+}
+
+func (s *Server) currentUsers() map[string]string {
+	if m := s.users.Load(); m != nil {
+		return *m
+	}
+	return nil
 }
 
 type userCounter struct {
@@ -52,12 +71,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("http: node %d already started", cfg.NodeID)
 	}
 
-	users := map[string]string{}
-	for _, u := range cfg.Users {
-		if u.UUID != "" {
-			users[u.UUID] = u.Password
-		}
-	}
+	users := buildAuthUsers(cfg.Users)
 
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	ln, err := net.Listen("tcp", addr)
@@ -67,7 +81,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	s.listener = ln
 	s.cfg = cfg
-	s.users = users
+	s.users.Store(&users)
 
 	go s.acceptLoop(ln)
 	return nil
@@ -133,7 +147,8 @@ func (s *Server) handle(conn net.Conn) {
 }
 
 func (s *Server) checkAuth(req *http.Request) (int64, bool) {
-	if len(s.users) == 0 {
+	users := s.currentUsers()
+	if len(users) == 0 {
 		return 0, true
 	}
 	header := req.Header.Get("Proxy-Authorization")
@@ -150,11 +165,18 @@ func (s *Server) checkAuth(req *http.Request) (int64, bool) {
 		return 0, false
 	}
 	username, password := parts[0], parts[1]
-	want, exists := s.users[username]
+	want, exists := users[username]
 	if !exists || want != password {
 		return 0, false
 	}
 	return hashUsername(username), true
+}
+
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	m := buildAuthUsers(users)
+	s.users.Store(&m)
+	return nil
 }
 
 func (s *Server) handleConnect(conn net.Conn, req *http.Request, userID int64) {

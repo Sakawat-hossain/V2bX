@@ -43,9 +43,28 @@ type Server struct {
 	mu       sync.Mutex
 	listener net.Listener
 	cfg      protocol.NodeConfig
-	users    map[string]string // username -> password; empty when no auth configured
+	// users maps username -> password; empty when no auth is configured.
+	// Behind an atomic pointer so it can be swapped on a live user reload.
+	users atomic.Pointer[map[string]string]
 
 	counters sync.Map // int64 userID -> *userCounter
+}
+
+func buildAuthUsers(users []protocol.User) map[string]string {
+	m := make(map[string]string, len(users))
+	for _, u := range users {
+		if u.UUID != "" {
+			m[u.UUID] = u.Password
+		}
+	}
+	return m
+}
+
+func (s *Server) currentUsers() map[string]string {
+	if m := s.users.Load(); m != nil {
+		return *m
+	}
+	return nil
 }
 
 type userCounter struct {
@@ -67,12 +86,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("socks5: node %d already started", cfg.NodeID)
 	}
 
-	users := map[string]string{}
-	for _, u := range cfg.Users {
-		if u.UUID != "" {
-			users[u.UUID] = u.Password
-		}
-	}
+	users := buildAuthUsers(cfg.Users)
 
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	ln, err := net.Listen("tcp", addr)
@@ -82,7 +96,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	s.listener = ln
 	s.cfg = cfg
-	s.users = users
+	s.users.Store(&users)
 
 	go s.acceptLoop(ln)
 	return nil
@@ -174,7 +188,8 @@ func (s *Server) negotiate(conn net.Conn) (int64, error) {
 		return 0, err
 	}
 
-	requireAuth := len(s.users) > 0
+	users := s.currentUsers()
+	requireAuth := len(users) > 0
 	wantMethod := byte(authNone)
 	if requireAuth {
 		wantMethod = authPassword
@@ -197,10 +212,10 @@ func (s *Server) negotiate(conn net.Conn) (int64, error) {
 	if !requireAuth {
 		return 0, nil
 	}
-	return s.authenticate(conn)
+	return s.authenticate(conn, users)
 }
 
-func (s *Server) authenticate(conn net.Conn) (int64, error) {
+func (s *Server) authenticate(conn net.Conn, users map[string]string) (int64, error) {
 	head := make([]byte, 2)
 	if _, err := io.ReadFull(conn, head); err != nil {
 		return 0, err
@@ -220,7 +235,7 @@ func (s *Server) authenticate(conn net.Conn) (int64, error) {
 	}
 
 	username, password := string(userBuf), string(passBuf)
-	want, ok := s.users[username]
+	want, ok := users[username]
 	if !ok || want != password {
 		conn.Write([]byte{0x01, 0x01})
 		return 0, fmt.Errorf("socks5: auth failed for user %q", username)
@@ -293,6 +308,13 @@ func readConnectRequest(conn net.Conn) (string, error) {
 func writeReply(conn net.Conn, code byte) error {
 	_, err := conn.Write([]byte{socksVersion5, code, 0x00, addrIPv4, 0, 0, 0, 0, 0, 0})
 	return err
+}
+
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	m := buildAuthUsers(users)
+	s.users.Store(&m)
+	return nil
 }
 
 func (s *Server) counterFor(userID int64) *userCounter {

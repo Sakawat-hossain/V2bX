@@ -34,9 +34,28 @@ type Server struct {
 	listener net.Listener
 	httpSrv  *http.Server
 	cfg      protocol.NodeConfig
-	users    map[string]string // username -> password
+	// users maps username -> password. Behind an atomic pointer so it can be
+	// swapped on a live user reload while request handlers read it.
+	users atomic.Pointer[map[string]string]
 
 	counters sync.Map // int64 userID -> *userCounter
+}
+
+func buildAuthUsers(users []protocol.User) map[string]string {
+	m := make(map[string]string, len(users))
+	for _, u := range users {
+		if u.UUID != "" {
+			m[u.UUID] = u.Password
+		}
+	}
+	return m
+}
+
+func (s *Server) currentUsers() map[string]string {
+	if m := s.users.Load(); m != nil {
+		return *m
+	}
+	return nil
 }
 
 type userCounter struct {
@@ -68,10 +87,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("naive: node %d: load cert: %w", cfg.NodeID, err)
 	}
 
-	users := make(map[string]string, len(cfg.Users))
-	for _, u := range cfg.Users {
-		users[u.UUID] = u.Password
-	}
+	users := buildAuthUsers(cfg.Users)
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 	httpSrv := &http.Server{Handler: http.HandlerFunc(s.handleConnect)}
@@ -89,9 +105,16 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.httpSrv = httpSrv
 	s.cfg = cfg
-	s.users = users
+	s.users.Store(&users)
 
 	go httpSrv.Serve(ln)
+	return nil
+}
+
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	m := buildAuthUsers(users)
+	s.users.Store(&m)
 	return nil
 }
 
@@ -213,7 +236,7 @@ func (s *Server) checkAuth(r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	username, password := parts[0], parts[1]
-	want, ok := s.users[username]
+	want, ok := s.currentUsers()[username]
 	if !ok || want != password {
 		return 0, false
 	}

@@ -82,6 +82,15 @@ type ProtocolServer interface {
 	Name() string
 }
 
+// UserUpdater is an optional interface a ProtocolServer can implement to
+// swap its user set live, without closing the listener or dropping active
+// connections. When a sync changes only the user list (not the port, cipher,
+// or TLS), the manager prefers this over a restart. Servers whose underlying
+// core can't reload users leave it unimplemented and get a restart instead.
+type UserUpdater interface {
+	UpdateUsers(users []User) error
+}
+
 // Factory builds a fresh, unstarted ProtocolServer instance.
 type Factory func() ProtocolServer
 

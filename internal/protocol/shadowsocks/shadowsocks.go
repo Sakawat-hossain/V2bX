@@ -165,6 +165,23 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.mu.Lock()
+	svc := s.service
+	s.mu.Unlock()
+	if svc == nil {
+		return fmt.Errorf("shadowsocks: not started")
+	}
+	ids := make([]int64, len(users))
+	passwords := make([]string, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+		passwords[i] = u.Password
+	}
+	return svc.UpdateUsersWithPasswords(ids, passwords)
+}
+
 func (s *Server) counterFor(userID int64) *userCounter {
 	v, _ := s.counters.LoadOrStore(userID, &userCounter{})
 	return v.(*userCounter)

@@ -123,6 +123,24 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.mu.Lock()
+	svc := s.service
+	s.mu.Unlock()
+	if svc == nil {
+		return fmt.Errorf("vmess: not started")
+	}
+	ids := make([]int64, len(users))
+	uuids := make([]string, len(users))
+	alterIDs := make([]int, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+		uuids[i] = u.UUID
+	}
+	return svc.UpdateUsers(ids, uuids, alterIDs)
+}
+
 func (s *Server) counterFor(userID int64) *userCounter {
 	v, _ := s.counters.LoadOrStore(userID, &userCounter{})
 	return v.(*userCounter)

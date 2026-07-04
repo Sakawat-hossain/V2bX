@@ -144,6 +144,30 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
+// UpdateUsers swaps the live user set without closing the listener.
+func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.mu.Lock()
+	svc := s.service
+	s.mu.Unlock()
+	if svc == nil {
+		return fmt.Errorf("tuic: not started")
+	}
+	ids := make([]int64, len(users))
+	uuids := make([][16]byte, len(users))
+	passwords := make([]string, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+		parsed, err := uuid.FromString(u.UUID)
+		if err != nil {
+			parsed = uuid.NewV5(uuid.Nil, u.UUID)
+		}
+		uuids[i] = parsed
+		passwords[i] = u.Password
+	}
+	svc.UpdateUsers(ids, uuids, passwords)
+	return nil
+}
+
 func (s *Server) counterFor(userID int64) *userCounter {
 	v, _ := s.counters.LoadOrStore(userID, &userCounter{})
 	return v.(*userCounter)
