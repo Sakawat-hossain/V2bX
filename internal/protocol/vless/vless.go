@@ -61,17 +61,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("vless: node %d has no users configured", cfg.NodeID)
 	}
 
-	service := svless.NewService[int64](logger.NOP(), s)
-
-	userIDs := make([]int64, len(cfg.Users))
-	uuids := make([]string, len(cfg.Users))
-	flows := make([]string, len(cfg.Users))
-	for i, u := range cfg.Users {
-		userIDs[i] = u.ID
-		uuids[i] = u.UUID
-		flows[i] = u.Flow
-	}
-	service.UpdateUsers(userIDs, uuids, flows)
+	service := buildVLessService(s, cfg.Users)
 
 	addr := net.JoinHostPort(cfg.ListenIP, strconv.Itoa(cfg.Port))
 	var ln net.Listener
@@ -93,20 +83,41 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.service = service
 	s.cfg = cfg
 
-	go s.acceptLoop(ln, service)
+	go s.acceptLoop(ln)
 	return nil
 }
 
-func (s *Server) acceptLoop(ln net.Listener, service *svless.Service[int64]) {
+func buildVLessService(handler svless.Handler, users []protocol.User) *svless.Service[int64] {
+	svc := svless.NewService[int64](logger.NOP(), handler)
+	ids := make([]int64, len(users))
+	uuids := make([]string, len(users))
+	flows := make([]string, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+		uuids[i] = u.UUID
+		flows[i] = u.Flow
+	}
+	svc.UpdateUsers(ids, uuids, flows)
+	return svc
+}
+
+func (s *Server) acceptLoop(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
 		}
+		s.mu.Lock()
+		svc := s.service
+		s.mu.Unlock()
+		if svc == nil {
+			conn.Close()
+			continue
+		}
 		go func() {
 			defer conn.Close()
 			ctx := context.Background()
-			service.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
+			svc.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
 		}()
 	}
 }
@@ -137,23 +148,20 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
-// UpdateUsers swaps the live user set without closing the listener.
+// UpdateUsers builds a fresh service with the new users and atomically swaps
+// it in, so in-flight connections keep serving on the old, now-immutable
+// service instead of racing its user map.
 func (s *Server) UpdateUsers(users []protocol.User) error {
 	s.mu.Lock()
-	svc := s.service
+	running := s.service != nil
 	s.mu.Unlock()
-	if svc == nil {
+	if !running {
 		return fmt.Errorf("vless: not started")
 	}
-	ids := make([]int64, len(users))
-	uuids := make([]string, len(users))
-	flows := make([]string, len(users))
-	for i, u := range users {
-		ids[i] = u.ID
-		uuids[i] = u.UUID
-		flows[i] = u.Flow
-	}
-	svc.UpdateUsers(ids, uuids, flows)
+	fresh := buildVLessService(s, users)
+	s.mu.Lock()
+	s.service = fresh
+	s.mu.Unlock()
 	return nil
 }
 

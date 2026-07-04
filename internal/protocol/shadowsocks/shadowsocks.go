@@ -103,7 +103,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.service = service
 	s.cfg = cfg
 
-	go s.acceptLoop(ln, service)
+	go s.acceptLoop(ln)
 	s.logger.Info("started", "node_id", cfg.NodeID, "addr", addr, "cipher", cfg.Cipher, "users", len(cfg.Users))
 	return nil
 }
@@ -119,16 +119,26 @@ func newMultiService(cipher string, handler ss.Handler) (ss.MultiService[int64],
 	}
 }
 
-func (s *Server) acceptLoop(ln net.Listener, service ss.MultiService[int64]) {
+func (s *Server) acceptLoop(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return // listener closed
 		}
+		// Load the current service per connection so a live user reload
+		// (which swaps in a fresh service) takes effect for new connections
+		// without racing the map that in-flight connections are reading.
+		s.mu.Lock()
+		svc := s.service
+		s.mu.Unlock()
+		if svc == nil {
+			conn.Close()
+			continue
+		}
 		go func() {
 			defer conn.Close()
 			ctx := context.Background()
-			if err := service.NewConnection(ctx, conn, M.Metadata{}); err != nil {
+			if err := svc.NewConnection(ctx, conn, M.Metadata{}); err != nil {
 				s.logger.Debug("connection error", "error", err)
 			}
 		}()
@@ -165,13 +175,22 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
-// UpdateUsers swaps the live user set without closing the listener.
+// UpdateUsers swaps the live user set without closing the listener. Rather
+// than mutate the running service's user map (which the sing codec reads
+// without locking), it builds a fresh service and atomically swaps it in;
+// in-flight connections keep serving on the old, now-immutable service.
 func (s *Server) UpdateUsers(users []protocol.User) error {
 	s.mu.Lock()
-	svc := s.service
+	cipher := s.cfg.Cipher
+	running := s.service != nil
 	s.mu.Unlock()
-	if svc == nil {
+	if !running {
 		return fmt.Errorf("shadowsocks: not started")
+	}
+
+	fresh, err := newMultiService(cipher, s)
+	if err != nil {
+		return err
 	}
 	ids := make([]int64, len(users))
 	passwords := make([]string, len(users))
@@ -179,7 +198,14 @@ func (s *Server) UpdateUsers(users []protocol.User) error {
 		ids[i] = u.ID
 		passwords[i] = u.Password
 	}
-	return svc.UpdateUsersWithPasswords(ids, passwords)
+	if err := fresh.UpdateUsersWithPasswords(ids, passwords); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.service = fresh
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Server) counterFor(userID int64) *userCounter {

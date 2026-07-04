@@ -89,14 +89,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("anytls: node %d: load cert: %w", cfg.NodeID, err)
 	}
 
-	users, usersByName := buildAnyTLSUsers(cfg.Users)
-
-	service, err := anytls.NewService(anytls.ServiceConfig{
-		PaddingScheme: padding.DefaultPaddingScheme,
-		Users:         users,
-		Handler:       s,
-		Logger:        logger.NOP(),
-	})
+	service, usersByName, err := buildAnyTLSService(s, cfg.Users)
 	if err != nil {
 		return fmt.Errorf("anytls: node %d: %w", cfg.NodeID, err)
 	}
@@ -112,34 +105,62 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.cfg = cfg
 	s.usersByName.Store(&usersByName)
 
-	go s.acceptLoop(ln, service)
+	go s.acceptLoop(ln)
 	return nil
 }
 
-// UpdateUsers swaps the live user set without closing the listener.
+func buildAnyTLSService(handler N.TCPConnectionHandlerEx, users []protocol.User) (*anytls.Service, map[string]int64, error) {
+	list, byName := buildAnyTLSUsers(users)
+	svc, err := anytls.NewService(anytls.ServiceConfig{
+		PaddingScheme: padding.DefaultPaddingScheme,
+		Users:         list,
+		Handler:       handler,
+		Logger:        logger.NOP(),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return svc, byName, nil
+}
+
+// UpdateUsers builds a fresh service with the new users and atomically swaps
+// it in, so in-flight connections keep serving on the old, now-immutable
+// service instead of racing its user map.
 func (s *Server) UpdateUsers(users []protocol.User) error {
 	s.mu.Lock()
-	svc := s.service
+	running := s.service != nil
 	s.mu.Unlock()
-	if svc == nil {
+	if !running {
 		return fmt.Errorf("anytls: not started")
 	}
-	list, byName := buildAnyTLSUsers(users)
-	svc.UpdateUsers(list)
+	fresh, byName, err := buildAnyTLSService(s, users)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.service = fresh
+	s.mu.Unlock()
 	s.usersByName.Store(&byName)
 	return nil
 }
 
-func (s *Server) acceptLoop(ln net.Listener, service *anytls.Service) {
+func (s *Server) acceptLoop(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
 		}
+		s.mu.Lock()
+		svc := s.service
+		s.mu.Unlock()
+		if svc == nil {
+			conn.Close()
+			continue
+		}
 		go func() {
 			defer conn.Close()
 			ctx := context.Background()
-			_ = service.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
+			_ = svc.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
 		}()
 	}
 }

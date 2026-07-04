@@ -55,17 +55,8 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("vmess: node %d has no users configured", cfg.NodeID)
 	}
 
-	service := vm.NewService[int64](s)
-
-	userIDs := make([]int64, len(cfg.Users))
-	uuids := make([]string, len(cfg.Users))
-	alterIDs := make([]int, len(cfg.Users))
-	for i, u := range cfg.Users {
-		userIDs[i] = u.ID
-		uuids[i] = u.UUID
-		alterIDs[i] = 0
-	}
-	if err := service.UpdateUsers(userIDs, uuids, alterIDs); err != nil {
+	service, err := buildVMessService(s, cfg.Users)
+	if err != nil {
 		return fmt.Errorf("vmess: node %d: invalid user UUIDs: %w", cfg.NodeID, err)
 	}
 
@@ -79,22 +70,44 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.service = service
 	s.cfg = cfg
 
-	go s.acceptLoop(ln, service)
+	go s.acceptLoop(ln)
 	return nil
 }
 
-func (s *Server) acceptLoop(ln net.Listener, service *vm.Service[int64]) {
+func (s *Server) acceptLoop(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
 		}
+		s.mu.Lock()
+		svc := s.service
+		s.mu.Unlock()
+		if svc == nil {
+			conn.Close()
+			continue
+		}
 		go func() {
 			defer conn.Close()
 			ctx := context.Background()
-			service.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
+			svc.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), func(error) {})
 		}()
 	}
+}
+
+func buildVMessService(handler vm.Handler, users []protocol.User) (*vm.Service[int64], error) {
+	svc := vm.NewService[int64](handler)
+	ids := make([]int64, len(users))
+	uuids := make([]string, len(users))
+	alterIDs := make([]int, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+		uuids[i] = u.UUID
+	}
+	if err := svc.UpdateUsers(ids, uuids, alterIDs); err != nil {
+		return nil, err
+	}
+	return svc, nil
 }
 
 func (s *Server) Stop() error {
@@ -123,22 +136,24 @@ func (s *Server) Stats() protocol.UsageStats {
 	return out
 }
 
-// UpdateUsers swaps the live user set without closing the listener.
+// UpdateUsers builds a fresh service with the new users and atomically swaps
+// it in, so in-flight connections keep serving on the old, now-immutable
+// service instead of racing its user map.
 func (s *Server) UpdateUsers(users []protocol.User) error {
 	s.mu.Lock()
-	svc := s.service
+	running := s.service != nil
 	s.mu.Unlock()
-	if svc == nil {
+	if !running {
 		return fmt.Errorf("vmess: not started")
 	}
-	ids := make([]int64, len(users))
-	uuids := make([]string, len(users))
-	alterIDs := make([]int, len(users))
-	for i, u := range users {
-		ids[i] = u.ID
-		uuids[i] = u.UUID
+	fresh, err := buildVMessService(s, users)
+	if err != nil {
+		return err
 	}
-	return svc.UpdateUsers(ids, uuids, alterIDs)
+	s.mu.Lock()
+	s.service = fresh
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Server) counterFor(userID int64) *userCounter {
