@@ -212,6 +212,9 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 			KeyFile:  entry.KeyFile,
 		},
 		MaxConnections: entry.Limits.MaxConnections,
+		UpMbps:         firstNonZero(remoteCfg.UpMbps, entry.UpMbps),
+		DownMbps:       firstNonZero(remoteCfg.DownMbps, entry.DownMbps),
+		Obfs:           firstNonEmpty(remoteCfg.Obfs, entry.Obfs),
 		Extra:          map[string]any{},
 	}
 	if remoteCfg.ServerKey != "" {
@@ -238,6 +241,20 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 		})
 	}
 	return nc, nil
+}
+
+func firstNonZero(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // applyNodeConfig starts the node if it isn't running, or restarts it if the

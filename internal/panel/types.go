@@ -21,6 +21,13 @@ type NodeConfigResponse struct {
 	ServerName string `json:"server_name,omitempty"`
 	TLS        int    `json:"tls,omitempty"` // 0=none 1=tls 2=reality/xtls, panel-defined
 
+	// Hysteria/Hysteria2 knobs the panel pushes down. UpMbps/DownMbps drive
+	// the Brutal congestion control (0 = client-decides); Obfs is the
+	// Hysteria2 Salamander obfuscation password.
+	UpMbps   int    `json:"up_mbps,omitempty"`
+	DownMbps int    `json:"down_mbps,omitempty"`
+	Obfs     string `json:"obfs,omitempty"`
+
 	NetworkSettings map[string]any `json:"networkSettings,omitempty"`
 	TLSSettings     map[string]any `json:"tls_settings,omitempty"`
 

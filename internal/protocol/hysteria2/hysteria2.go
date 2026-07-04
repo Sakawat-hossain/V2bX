@@ -74,13 +74,26 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	tlsConfig := tlsutil.NewServerConfig(certs, []string{"h3"})
 
 	ctx, cancel := context.WithCancel(context.Background())
-	service, err := hy2.NewService[int64](hy2.ServiceOptions{
+	opts := hy2.ServiceOptions{
 		Context:    ctx,
 		Logger:     logger.NOP(),
 		TLSConfig:  tlsConfig,
 		UDPTimeout: 300 * time.Second,
 		Handler:    s,
-	})
+	}
+	// A configured bandwidth caps the node's rate. Brutal-capable clients
+	// (which advertise a bandwidth) then get the Brutal congestion control
+	// capped to this rate — Brutal ignores packet loss, so throughput holds
+	// up on links where the network injects loss to throttle. Auto/BBR clients
+	// still work. We deliberately do NOT set IgnoreClientBandwidth: with a
+	// fixed rate it rejects BBR clients outright.
+	if cfg.DownMbps > 0 {
+		opts.SendBPS = uint64(cfg.DownMbps) * 125_000 // server -> client = user download
+	}
+	if cfg.UpMbps > 0 {
+		opts.ReceiveBPS = uint64(cfg.UpMbps) * 125_000 // client -> server = user upload
+	}
+	service, err := hy2.NewService[int64](opts)
 	if err != nil {
 		cancel()
 		return fmt.Errorf("hysteria2: node %d: %w", cfg.NodeID, err)

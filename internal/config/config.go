@@ -69,6 +69,13 @@ type NodeEntry struct {
 	TFO      bool `json:"tfo,omitempty"`
 	Sniffing bool `json:"sniffing,omitempty"`
 
+	// Hysteria overrides, used when the panel doesn't supply them. UpMbps/
+	// DownMbps set the Brutal congestion-control rate (Mbps); Obfs is the
+	// Hysteria2 Salamander password.
+	UpMbps   int    `json:"up_mbps,omitempty"`
+	DownMbps int    `json:"down_mbps,omitempty"`
+	Obfs     string `json:"obfs,omitempty"`
+
 	Limits NodeLimits `json:"limits,omitempty"`
 }
 

@@ -161,6 +161,63 @@ func TestStartStopAndRelay(t *testing.T) {
 	}
 }
 
+func TestStartWithBandwidthRelays(t *testing.T) {
+	certFile, keyFile := generateSelfSigned(t)
+	port := freePort(t)
+
+	srv := New()
+	cfg := protocol.NodeConfig{
+		NodeID: 5, ListenIP: "127.0.0.1", Port: port,
+		Users:    []protocol.User{{ID: 1, Password: "pw"}},
+		TLS:      protocol.TLSConfig{CertFile: certFile, KeyFile: keyFile},
+		UpMbps:   100, // forces Brutal congestion control + IgnoreClientBandwidth
+		DownMbps: 100,
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start with bandwidth: %v", err)
+	}
+	defer srv.Stop()
+
+	echo := newEchoUpstream(t)
+	defer echo.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := hy2.NewClient(hy2.ClientOptions{
+		Context:       ctx,
+		Dialer:        N.SystemDialer,
+		Logger:        logger.NOP(),
+		ServerAddress: M.ParseSocksaddr(net.JoinHostPort("127.0.0.1", strconv.Itoa(port))),
+		ServerPorts:   []string{strconv.Itoa(port) + ":" + strconv.Itoa(port)},
+		Password:      "pw",
+		TLSConfig:     &insecureClientTLSConfig{&tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h3"}}},
+	})
+	if err != nil {
+		t.Fatalf("hy2.NewClient: %v", err)
+	}
+	defer client.CloseWithError(nil)
+
+	conn, err := client.DialConn(ctx, M.ParseSocksaddr(echo.Addr().String()))
+	if err != nil {
+		t.Fatalf("DialConn: %v", err)
+	}
+	defer conn.Close()
+
+	msg := []byte("brutal bandwidth path")
+	if _, err := conn.Write(msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, len(msg))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("read echo: %v", err)
+	}
+	if string(buf) != string(msg) {
+		t.Fatalf("echo mismatch: got %q want %q", buf, msg)
+	}
+}
+
 func TestStartMissingTLSAutoGenerates(t *testing.T) {
 	srv := New()
 	cfg := protocol.NodeConfig{NodeID: 2, ListenIP: "127.0.0.1", Port: freePort(t), Users: []protocol.User{{ID: 1, Password: "x"}}}

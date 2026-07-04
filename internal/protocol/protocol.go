@@ -47,6 +47,12 @@ type NodeConfig struct {
 	// 0 means unlimited.
 	MaxConnections int
 
+	// UpMbps/DownMbps set the Hysteria Brutal congestion-control rate in
+	// Mbps (0 = auto / client-decides). Obfs is the Hysteria2 Salamander
+	// obfuscation password (empty = none).
+	UpMbps, DownMbps int
+	Obfs             string
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 

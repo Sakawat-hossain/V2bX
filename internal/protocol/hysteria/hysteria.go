@@ -32,10 +32,18 @@ func init() {
 
 const udpIdleTimeout = 300 * time.Second
 
-// defaultBPS is used when no per-node bandwidth limit is configured.
-// Hysteria v1 requires a nonzero server-side send/receive rate even though
-// actual throughput is governed by the client's own congestion control.
+// defaultBPS is used when no per-node bandwidth is configured. Hysteria v1
+// requires a nonzero server-side send/receive rate.
 const defaultBPS = 1_000_000_000 // 1 Gbps
+
+// bpsOrDefault converts a Mbps figure to bytes/sec, falling back to
+// defaultBPS when unset (0).
+func bpsOrDefault(mbps int) uint64 {
+	if mbps <= 0 {
+		return defaultBPS
+	}
+	return uint64(mbps) * 125_000 // 1 Mbps = 125,000 bytes/s
+}
 
 // Server is a Hysteria (v1) protocol.ProtocolServer. Zero value is ready to use.
 type Server struct {
@@ -84,8 +92,8 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		Context:    ctx,
 		Logger:     logger.NOP(),
 		TLSConfig:  tlsConfig,
-		SendBPS:    defaultBPS,
-		ReceiveBPS: defaultBPS,
+		SendBPS:    bpsOrDefault(cfg.DownMbps), // server -> client = user download
+		ReceiveBPS: bpsOrDefault(cfg.UpMbps),   // client -> server = user upload
 		UDPTimeout: udpIdleTimeout,
 		Handler:    s,
 	})
