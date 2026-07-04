@@ -30,17 +30,23 @@ func newMockPanel(t *testing.T, ssPort int) *mockPanel {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/server/UniProxy/config", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"node_id": 1, "node_type": "shadowsocks", "port": ssPort, "cipher": "aes-256-gcm",
+			"protocol": "shadowsocks", "server_port": ssPort, "cipher": "aes-256-gcm",
 		})
 	})
 	mux.HandleFunc("/api/v1/server/UniProxy/user", func(w http.ResponseWriter, r *http.Request) {
+		// XBoard sends no password — the UUID is the credential.
 		json.NewEncoder(w).Encode(map[string]any{
-			"users": []map[string]any{{"id": 42, "uuid": "u1", "password": "integration-test-pw"}},
+			"users": []map[string]any{{"id": 42, "uuid": "integration-test-uuid"}},
 		})
 	})
 	mux.HandleFunc("/api/v1/server/UniProxy/push", func(w http.ResponseWriter, r *http.Request) {
-		var records []panel.TrafficRecord
-		json.NewDecoder(r.Body).Decode(&records)
+		var body map[string][2]uint64
+		json.NewDecoder(r.Body).Decode(&body)
+		records := make([]panel.TrafficRecord, 0, len(body))
+		for uid, ud := range body {
+			id, _ := strconv.ParseInt(uid, 10, 64)
+			records = append(records, panel.TrafficRecord{UID: id, Upload: ud[0], Download: ud[1]})
+		}
 		mp.pushed <- records
 	})
 	mux.HandleFunc("/api/v1/server/UniProxy/alive", func(w http.ResponseWriter, r *http.Request) {

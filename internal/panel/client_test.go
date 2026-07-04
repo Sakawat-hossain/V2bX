@@ -18,19 +18,19 @@ func mockPanel(t *testing.T) *httptest.Server {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		json.NewEncoder(w).Encode(NodeConfigResponse{
-			NodeID: 1, NodeType: "shadowsocks", Port: 443, Cipher: "aes-256-gcm",
-		})
+		// XBoard reports the port as server_port.
+		w.Write([]byte(`{"protocol":"shadowsocks","server_port":443,"cipher":"aes-256-gcm"}`))
 	})
 	mux.HandleFunc("/api/v1/server/UniProxy/user", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(UserListResponse{Users: []UserResponse{
-			{ID: 1, UUID: "u1", Password: "pw1", SpeedLimit: 0, DeviceLimit: 3},
-			{ID: 2, UUID: "u2", Password: "pw2"},
+			{ID: 1, UUID: "u1", SpeedLimit: 0, DeviceLimit: 3},
+			{ID: 2, UUID: "u2"},
 		}})
 	})
 	mux.HandleFunc("/api/v1/server/UniProxy/push", func(w http.ResponseWriter, r *http.Request) {
-		var records []TrafficRecord
-		if err := json.NewDecoder(r.Body).Decode(&records); err != nil {
+		// Panel expects an object keyed by user id: {"1":[u,d]}.
+		var body map[string][2]uint64
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -60,7 +60,7 @@ func TestFetchNodeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchNodeConfig: %v", err)
 	}
-	if cfg.Port != 443 || cfg.Cipher != "aes-256-gcm" {
+	if cfg.ListenPort() != 443 || cfg.Cipher != "aes-256-gcm" {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }
@@ -84,11 +84,11 @@ func TestPushTrafficAndAlive(t *testing.T) {
 	defer srv.Close()
 	c := newTestClient(t, srv.URL)
 
-	err := c.PushTraffic(context.Background(), 1, []TrafficRecord{{UID: 1, Upload: 100, Download: 200}})
+	err := c.PushTraffic(context.Background(), 1, "shadowsocks", []TrafficRecord{{UID: 1, Upload: 100, Download: 200}})
 	if err != nil {
 		t.Fatalf("PushTraffic: %v", err)
 	}
-	err = c.ReportAlive(context.Background(), 1, []AliveRecord{{UID: 1, IP: "1.2.3.4"}})
+	err = c.ReportAlive(context.Background(), 1, "shadowsocks", []AliveRecord{{UID: 1, IP: "1.2.3.4"}})
 	if err != nil {
 		t.Fatalf("ReportAlive: %v", err)
 	}

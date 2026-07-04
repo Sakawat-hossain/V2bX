@@ -120,19 +120,29 @@ func (c *Client) FetchUsers(ctx context.Context, nodeID int64, nodeType string) 
 	return bare, nil
 }
 
-// PushTraffic reports accumulated per-user traffic deltas for nodeID.
-func (c *Client) PushTraffic(ctx context.Context, nodeID int64, records []TrafficRecord) error {
-	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}}
-	if _, err := c.postJSON(ctx, c.pushPath, q, records); err != nil {
+// PushTraffic reports accumulated per-user traffic deltas for nodeID. The
+// panel expects an object keyed by user id: {"1": [upload, download], ...}.
+func (c *Client) PushTraffic(ctx context.Context, nodeID int64, nodeType string, records []TrafficRecord) error {
+	body := make(map[string][2]uint64, len(records))
+	for _, r := range records {
+		body[strconv.FormatInt(r.UID, 10)] = [2]uint64{r.Upload, r.Download}
+	}
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}, "node_type": {nodeType}}
+	if _, err := c.postJSON(ctx, c.pushPath, q, body); err != nil {
 		return fmt.Errorf("panel: push traffic: %w", err)
 	}
 	return nil
 }
 
-// ReportAlive reports the currently-online users for nodeID.
-func (c *Client) ReportAlive(ctx context.Context, nodeID int64, records []AliveRecord) error {
-	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}}
-	if _, err := c.postJSON(ctx, c.alivePath, q, records); err != nil {
+// ReportAlive reports currently-online users for nodeID. The panel expects an
+// object keyed by user id: {"1": ["1.2.3.4"], ...}.
+func (c *Client) ReportAlive(ctx context.Context, nodeID int64, nodeType string, records []AliveRecord) error {
+	body := make(map[string][]string, len(records))
+	for _, r := range records {
+		body[strconv.FormatInt(r.UID, 10)] = append(body[strconv.FormatInt(r.UID, 10)], r.IP)
+	}
+	q := url.Values{"node_id": {strconv.FormatInt(nodeID, 10)}, "node_type": {nodeType}}
+	if _, err := c.postJSON(ctx, c.alivePath, q, body); err != nil {
 		return fmt.Errorf("panel: report alive: %w", err)
 	}
 	return nil

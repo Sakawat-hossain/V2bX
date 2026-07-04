@@ -132,11 +132,16 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 		return nil, err
 	}
 
+	port := remoteCfg.ListenPort()
+	if port == 0 {
+		return nil, fmt.Errorf("panel returned no server_port for node %d", entry.NodeID)
+	}
+
 	nc := &protocol.NodeConfig{
 		NodeID:   entry.NodeID,
 		NodeType: entry.NodeType,
 		ListenIP: entry.ListenIP,
-		Port:     remoteCfg.Port,
+		Port:     port,
 		Cipher:   remoteCfg.Cipher,
 		TFO:      entry.TFO,
 		Sniffing: entry.Sniffing,
@@ -145,8 +150,18 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 			CertFile: entry.CertFile,
 			KeyFile:  entry.KeyFile,
 		},
+		Extra: map[string]any{},
+	}
+	if remoteCfg.ServerKey != "" {
+		nc.Extra["server_key"] = remoteCfg.ServerKey
 	}
 	for _, u := range users {
+		// The panel doesn't send a separate password — the user's UUID is the
+		// credential for Shadowsocks, Trojan, TUIC, etc.
+		password := u.Password
+		if password == "" {
+			password = u.UUID
+		}
 		speedLimit := u.SpeedLimit
 		if speedLimit == 0 {
 			speedLimit = entry.Limits.DefaultSpeedLimitBytes
@@ -156,7 +171,7 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 			deviceLimit = entry.Limits.DeviceLimit
 		}
 		nc.Users = append(nc.Users, protocol.User{
-			ID: u.ID, UUID: u.UUID, Password: u.Password, Flow: u.Flow,
+			ID: u.ID, UUID: u.UUID, Password: password, Flow: u.Flow,
 			SpeedLimit: speedLimit, DeviceLimit: deviceLimit,
 		})
 	}
@@ -193,6 +208,9 @@ func (m *Manager) applyNodeConfig(entry config.NodeEntry, nc *protocol.NodeConfi
 		return
 	}
 	rn.lastGood = nc
+	m.logger.Info("node running",
+		"node_id", entry.NodeID, "type", entry.NodeType,
+		"listen", fmt.Sprintf("%s:%d", nc.ListenIP, nc.Port), "users", len(nc.Users))
 }
 
 func configEqual(a, b *protocol.NodeConfig) bool {
@@ -226,7 +244,7 @@ func (m *Manager) PushStats(ctx context.Context) error {
 		for uid, tr := range stats.Users {
 			records = append(records, panel.TrafficRecord{UID: uid, Upload: tr.Upload, Download: tr.Download})
 		}
-		if err := m.client.PushTraffic(ctx, rn.entry.NodeID, records); err != nil {
+		if err := m.client.PushTraffic(ctx, rn.entry.NodeID, rn.entry.NodeType, records); err != nil {
 			m.logger.Warn("push traffic failed", "node_id", rn.entry.NodeID, "error", err)
 		}
 	}
