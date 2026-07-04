@@ -86,6 +86,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("vless: node %d: listen %s: %w", cfg.NodeID, addr, err)
 	}
 
+	ln = relay.LimitListener(ln, cfg.MaxConnections)
 	s.listener = ln
 	s.service = service
 	s.cfg = cfg

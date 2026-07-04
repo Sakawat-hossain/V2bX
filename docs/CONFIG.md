@@ -82,6 +82,7 @@ Defaults applied when the panel doesn't specify a per-user value.
 | `device_limit`                | int    | Max simultaneous devices per user. `0` = unlimited. |
 | `ip_limit`                    | int    | Max simultaneous IPs per user. `0` = unlimited. |
 | `traffic_reset_day`           | int    | Day-of-month traffic counters reset. `0` = defer to the panel. |
+| `max_connections`             | int    | Cap on concurrent accepted connections for the node (further accepts block until one closes). `0` = unlimited. A safety valve against connection floods. |
 
 ## Panel outages
 

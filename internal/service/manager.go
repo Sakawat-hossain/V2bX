@@ -211,7 +211,8 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 			CertFile: entry.CertFile,
 			KeyFile:  entry.KeyFile,
 		},
-		Extra: map[string]any{},
+		MaxConnections: entry.Limits.MaxConnections,
+		Extra:          map[string]any{},
 	}
 	if remoteCfg.ServerKey != "" {
 		nc.Extra["server_key"] = remoteCfg.ServerKey

@@ -24,6 +24,7 @@ import (
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
+	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
 func init() {
@@ -109,6 +110,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		return fmt.Errorf("naive: node %d: listen %s: %w", cfg.NodeID, addr, err)
 	}
 
+	ln = relay.LimitListener(ln, cfg.MaxConnections)
 	s.listener = ln
 	s.httpSrv = httpSrv
 	s.cfg = cfg

@@ -43,6 +43,10 @@ type NodeConfig struct {
 	TFO      bool
 	Fallback []FallbackRule
 
+	// MaxConnections caps concurrent accepted connections for this node;
+	// 0 means unlimited.
+	MaxConnections int
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 

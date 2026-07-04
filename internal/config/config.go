@@ -79,6 +79,7 @@ type NodeLimits struct {
 	DeviceLimit            int    `json:"device_limit,omitempty"`
 	IPLimit                int    `json:"ip_limit,omitempty"`
 	TrafficResetDay        int    `json:"traffic_reset_day,omitempty"` // day-of-month, 0 = panel default
+	MaxConnections         int    `json:"max_connections,omitempty"`   // concurrent accepted conns, 0 = unlimited
 }
 
 // NodeTypes lists every supported node type, in a stable presentation order
