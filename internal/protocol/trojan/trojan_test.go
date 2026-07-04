@@ -1,6 +1,7 @@
 package trojan
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,6 +21,48 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 )
+
+func TestFallbackForwardsProbeToDecoy(t *testing.T) {
+	certFile, keyFile := generateSelfSigned(t)
+	decoy := newEchoUpstream(t) // stands in for a real web backend
+	defer decoy.Close()
+
+	port := freePort(t)
+	srv := New()
+	cfg := protocol.NodeConfig{
+		NodeID: 1, ListenIP: "127.0.0.1", Port: port,
+		Users:        []protocol.User{{ID: 1, Password: "secret"}},
+		TLS:          protocol.TLSConfig{CertFile: certFile, KeyFile: keyFile},
+		FallbackAddr: decoy.Addr().String(),
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer srv.Stop()
+
+	// A probe: completes TLS with our cert, then sends a plain HTTP request
+	// instead of a Trojan header. It must be forwarded to the decoy, which
+	// echoes it back.
+	conn, err := tls.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatalf("tls.Dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Must be >= 56 bytes (the hash length the server reads first).
+	payload := []byte("GET / HTTP/1.1\r\nHost: decoy.example\r\nUser-Agent: probe-scanner\r\n\r\n")
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write(payload); err != nil {
+		t.Fatalf("write probe: %v", err)
+	}
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("read decoy response: %v", err)
+	}
+	if !bytes.Equal(buf, payload) {
+		t.Fatalf("decoy did not echo the probe's request: got %q", buf)
+	}
+}
 
 func freePort(t *testing.T) int {
 	t.Helper()

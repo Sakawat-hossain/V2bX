@@ -217,6 +217,7 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 		Obfs:           firstNonEmpty(remoteCfg.Obfs, entry.Obfs),
 		PortHopRange:   entry.PortHopRange,
 		Reality:        entry.Reality,
+		FallbackAddr:   entry.Fallback,
 		Extra:          map[string]any{},
 	}
 	if remoteCfg.ServerKey != "" {

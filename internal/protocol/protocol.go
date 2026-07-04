@@ -60,6 +60,12 @@ type NodeConfig struct {
 	// Reality, when set, makes a VLESS node use the Reality transport.
 	Reality *RealityConfig
 
+	// FallbackAddr is a "host:port" decoy backend. For TLS protocols that
+	// authenticate after the handshake (Trojan), an unauthenticated
+	// connection is transparently forwarded here instead of being dropped, so
+	// a probe sees a real site rather than a proxy that resets. Empty = drop.
+	FallbackAddr string
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 

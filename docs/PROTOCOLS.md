@@ -72,13 +72,18 @@ before rolling out fleet-wide.
 
 ## Trojan — done
 
-TLS is mandatory; only `cert_mode: self` with `cert_file`/`key_file` is
-currently wired up — ACME (`http`/`dns`) automation is planned. The
-password digest (SHA-224, lowercase hex) is compared as an opaque token
-against every configured user; on mismatch the connection is dropped
-silently rather than returning an error, matching Trojan's design goal of
-being indistinguishable from a plain TLS server to anyone without a valid
-password.
+TLS is mandatory (a self-signed cert is auto-generated when no
+`cert_file`/`key_file` is given). The password digest (SHA-224, lowercase
+hex) is compared as an opaque token against every configured user.
+
+**Decoy fallback.** By default an unauthenticated connection is dropped. A
+TLS server that resets everything without a valid password is itself a mild
+tell to an active prober, so set `fallback` to a decoy backend (`host:port`,
+e.g. a local web server serving a real page): probes and browsers are then
+transparently forwarded there — including the bytes already read — and see a
+genuine website instead of a proxy that hangs up. This is the
+poor-man's version of Reality; for the strongest anti-probing, prefer
+[VLESS-Reality](#vless-reality).
 
 ## Hysteria (v1) — done
 

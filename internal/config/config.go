@@ -86,6 +86,11 @@ type NodeEntry struct {
 	// Reality enables the VLESS-Reality transport for a vless node.
 	Reality *protocol.RealityConfig `json:"reality,omitempty"`
 
+	// Fallback is a "host:port" decoy backend (e.g. a local web server). For
+	// Trojan, unauthenticated connections are forwarded here instead of being
+	// dropped, so probes see a real site. Empty = drop.
+	Fallback string `json:"fallback,omitempty"`
+
 	Limits NodeLimits `json:"limits,omitempty"`
 }
 

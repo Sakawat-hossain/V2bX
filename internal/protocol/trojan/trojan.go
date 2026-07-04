@@ -6,6 +6,7 @@ package trojan
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
@@ -46,9 +47,10 @@ type Server struct {
 	// atomic pointer so it can be swapped on a live user reload.
 	users atomic.Pointer[map[string]int64]
 
-	counters sync.Map // int64 userID -> *userCounter
-	online   online.Tracker
-	limits   ratelimit.Store
+	counters     sync.Map // int64 userID -> *userCounter
+	online       online.Tracker
+	limits       ratelimit.Store
+	fallbackAddr string
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -101,6 +103,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.cfg = cfg
 	s.limits.Update(cfg.Users)
+	s.fallbackAddr = cfg.FallbackAddr
 	s.users.Store(&users)
 
 	go s.acceptLoop(ln)
@@ -160,7 +163,11 @@ func (s *Server) handle(conn net.Conn) {
 	users := s.users.Load()
 	userID, ok := (*users)[string(hexHash)]
 	if !ok {
-		return // not a valid Trojan client; drop silently rather than fingerprint ourselves
+		// Not a valid Trojan client (a probe or a browser). If a decoy
+		// backend is configured, forward the connection there so the client
+		// sees a real site; otherwise drop.
+		s.fallback(conn, reader, hexHash)
+		return
 	}
 	s.online.Mark(userID, online.IP(conn.RemoteAddr()))
 
@@ -201,6 +208,34 @@ func (s *Server) handle(conn net.Conn) {
 	c.upload.Add(up + preUp)
 	c.download.Add(down)
 }
+
+// fallback forwards an unauthenticated (post-TLS) connection to the decoy
+// backend, replaying the bytes already consumed so the backend sees the
+// client's full original request. With no backend configured it drops the
+// connection (the prior behavior), which is fine but more probe-detectable.
+func (s *Server) fallback(conn net.Conn, reader *bufio.Reader, consumed []byte) {
+	if s.fallbackAddr == "" {
+		return
+	}
+	conn.SetReadDeadline(time.Time{}) // this is now a full proxied web session
+	backend, err := net.DialTimeout("tcp", s.fallbackAddr, 10*time.Second)
+	if err != nil {
+		return
+	}
+	defer backend.Close()
+
+	client := &replayConn{Conn: conn, r: io.MultiReader(bytes.NewReader(consumed), reader)}
+	relay.Pipe(client, backend)
+}
+
+// replayConn reads from r (the already-consumed prefix followed by the
+// buffered reader) while writes still go straight to the connection.
+type replayConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *replayConn) Read(p []byte) (int, error) { return c.r.Read(p) }
 
 func discardCRLF(r *bufio.Reader) error {
 	buf := make([]byte, 2)

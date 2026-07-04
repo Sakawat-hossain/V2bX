@@ -76,6 +76,7 @@ sync — the fields below are agent-side overrides layered on top.
 | `obfs`       | string  | no       | Hysteria2 **Salamander** obfuscation password. Hides the QUIC handshake from DPI. Empty = plain QUIC. Both ends must match. |
 | `port_hop_range` | string | no  | Enable UDP **port hopping** for a QUIC node, e.g. `"20000-40000"`. The agent installs an `iptables` redirect from the range to the node port (needs root + iptables); the client sprays the range to evade per-flow throttling and single-port blocking. |
 | `reality`    | object  | no       | Enable **VLESS-Reality** (vless nodes only) — anti-active-probing transport. See [VLESS-Reality in PROTOCOLS.md](PROTOCOLS.md#vless-reality) for fields and the canary-first deployment guidance. |
+| `fallback`   | string  | no       | Decoy backend `host:port` for **Trojan**. An unauthenticated connection (a probe or browser) is transparently forwarded here instead of being dropped, so it sees a real site. Point it at a local web server serving a plausible page (e.g. `127.0.0.1:80`). Empty = drop. |
 | `limits`     | object  | no       | See [Limits](#limits). |
 
 ## Limits
