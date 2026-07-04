@@ -76,6 +76,11 @@ type NodeEntry struct {
 	DownMbps int    `json:"down_mbps,omitempty"`
 	Obfs     string `json:"obfs,omitempty"`
 
+	// PortHopRange enables UDP port hopping for QUIC nodes, e.g. "20000-40000".
+	// The agent installs an iptables redirect from the range to the node port
+	// (needs root + iptables). Empty = off.
+	PortHopRange string `json:"port_hop_range,omitempty"`
+
 	Limits NodeLimits `json:"limits,omitempty"`
 }
 

@@ -72,6 +72,9 @@ sync — the fields below are agent-side overrides layered on top.
 > **Certificates are optional.** For a TLS/QUIC node (Trojan, Hysteria, Hysteria2, TUIC, AnyTLS, Naive, or VLESS with a `cert_mode`), leaving `cert_file`/`key_file` blank makes V2bX generate a self-signed certificate in memory — matching the common self-signed + client-`insecure` deployment. Provide files when you have a real (e.g. Let's Encrypt) certificate.
 | `tfo`        | bool    | no       | Enable TCP Fast Open where supported. |
 | `sniffing`   | bool    | no       | Enable destination sniffing (SNI/HTTP Host) where supported. |
+| `up_mbps` / `down_mbps` | int | no | Hysteria/Hysteria2 bandwidth (Mbps). Caps the node rate and enables the **Brutal** congestion control — which ignores packet loss, so throughput holds up on throttled links. Usually supplied by the panel; set here to override. `0` = client-decides (BBR). |
+| `obfs`       | string  | no       | Hysteria2 **Salamander** obfuscation password. Hides the QUIC handshake from DPI. Empty = plain QUIC. Both ends must match. |
+| `port_hop_range` | string | no  | Enable UDP **port hopping** for a QUIC node, e.g. `"20000-40000"`. The agent installs an `iptables` redirect from the range to the node port (needs root + iptables); the client sprays the range to evade per-flow throttling and single-port blocking. |
 | `limits`     | object  | no       | See [Limits](#limits). |
 
 ## Limits

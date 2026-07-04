@@ -74,14 +74,16 @@
       "key_file": "/etc/v2bx/certs/hysteria.key"
     },
     {
-      "_comment": "Hysteria2 — same cert requirements as Hysteria v1.",
+      "_comment": "Hysteria2 — cert optional (self-signed auto-generated if omitted). Restricted-region knobs: up_mbps/down_mbps enable Brutal congestion control (holds throughput under loss-based throttling), obfs enables Salamander to hide the QUIC handshake, port_hop_range spreads UDP across a port range (agent installs the iptables redirect).",
       "node_id": 6,
       "node_type": "hysteria2",
       "enabled": true,
       "listen_ip": "0.0.0.0",
       "cert_mode": "self",
-      "cert_file": "/etc/v2bx/certs/hysteria2.crt",
-      "key_file": "/etc/v2bx/certs/hysteria2.key"
+      "up_mbps": 100,
+      "down_mbps": 200,
+      "obfs": "your-salamander-password",
+      "port_hop_range": "20000-40000"
     },
     {
       "_comment": "TUIC — QUIC-based, also needs a certificate.",

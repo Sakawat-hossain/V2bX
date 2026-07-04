@@ -53,6 +53,10 @@ type NodeConfig struct {
 	UpMbps, DownMbps int
 	Obfs             string
 
+	// PortHopRange, e.g. "20000-40000", enables UDP port hopping for QUIC
+	// nodes: the host redirects the range to the listen port. Empty = off.
+	PortHopRange string
+
 	Extra map[string]any // protocol-specific options that don't warrant a dedicated field
 }
 

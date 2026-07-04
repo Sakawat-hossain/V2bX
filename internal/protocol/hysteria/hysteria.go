@@ -20,6 +20,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/certutil"
 	"github.com/Sakawat-hossain/V2bX/internal/online"
+	"github.com/Sakawat-hossain/V2bX/internal/porthop"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
 	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
@@ -56,6 +57,7 @@ type Server struct {
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
 	limits   ratelimit.Store
+	hop      *porthop.Redirect
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -127,6 +129,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.cancel = cancel
 	s.cfg = cfg
 	s.limits.Update(cfg.Users)
+	s.hop = porthop.MaybeInstall(cfg.NodeID, cfg.PortHopRange, cfg.Port)
 	return nil
 }
 
@@ -137,6 +140,7 @@ func (s *Server) Stop() error {
 		return nil
 	}
 	s.cancel()
+	s.hop.Remove()
 	err := s.service.Close()
 	s.packetConn.Close()
 	s.packetConn = nil
