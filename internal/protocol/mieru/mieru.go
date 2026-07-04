@@ -20,6 +20,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
@@ -39,6 +40,7 @@ type Server struct {
 
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
+	limits   ratelimit.Store
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -102,6 +104,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	s.server = srv
 	s.cfg = cfg
+	s.limits.Update(cfg.Users)
 	s.usersByName = usersByName
 	s.running = true
 
@@ -151,7 +154,7 @@ func (s *Server) handle(conn net.Conn, req *model.Request) {
 		return
 	}
 
-	up, down := relay.Pipe(conn, upstream)
+	up, down := relay.Pipe(conn, s.limits.Limit(userID, upstream))
 	if userID != 0 {
 		c := s.counterFor(userID)
 		c.upload.Add(up)

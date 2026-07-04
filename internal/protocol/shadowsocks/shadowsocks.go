@@ -23,6 +23,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
@@ -53,6 +54,7 @@ type Server struct {
 
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
+	limits   ratelimit.Store
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -107,6 +109,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.service = service
 	s.cfg = cfg
+	s.limits.Update(cfg.Users)
 
 	go s.acceptLoop(ln)
 	s.logger.Info("started", "node_id", cfg.NodeID, "addr", addr, "cipher", cfg.Cipher, "users", len(cfg.Users))
@@ -185,6 +188,7 @@ func (s *Server) Stats() protocol.UsageStats {
 // without locking), it builds a fresh service and atomically swaps it in;
 // in-flight connections keep serving on the old, now-immutable service.
 func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.limits.Update(users)
 	s.mu.Lock()
 	cipher := s.cfg.Cipher
 	running := s.service != nil
@@ -232,7 +236,7 @@ func (s *Server) NewConnection(ctx context.Context, conn net.Conn, metadata M.Me
 	}
 	defer upstream.Close()
 
-	up, down := relay.Pipe(conn, upstream)
+	up, down := relay.Pipe(conn, s.limits.Limit(userID, upstream))
 	counter.upload.Add(up)
 	counter.download.Add(down)
 	return nil

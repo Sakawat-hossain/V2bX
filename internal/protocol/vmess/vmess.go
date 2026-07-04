@@ -18,6 +18,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
@@ -34,6 +35,7 @@ type Server struct {
 
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
+	limits   ratelimit.Store
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -74,6 +76,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.service = service
 	s.cfg = cfg
+	s.limits.Update(cfg.Users)
 
 	go s.acceptLoop(ln)
 	return nil
@@ -145,6 +148,7 @@ func (s *Server) Stats() protocol.UsageStats {
 // it in, so in-flight connections keep serving on the old, now-immutable
 // service instead of racing its user map.
 func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.limits.Update(users)
 	s.mu.Lock()
 	running := s.service != nil
 	s.mu.Unlock()
@@ -179,7 +183,7 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	}
 	defer upstream.Close()
 
-	up, down := relay.Pipe(conn, upstream)
+	up, down := relay.Pipe(conn, s.limits.Limit(userID, upstream))
 	counter.upload.Add(up)
 	counter.download.Add(down)
 	onClose(nil)

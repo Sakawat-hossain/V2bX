@@ -23,6 +23,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 )
 
 func init() {
@@ -41,6 +42,7 @@ type Server struct {
 
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
+	limits   ratelimit.Store
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -110,6 +112,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 	s.listener = ln
 	s.httpSrv = httpSrv
 	s.cfg = cfg
+	s.limits.Update(cfg.Users)
 	s.users.Store(&users)
 
 	go httpSrv.Serve(ln)
@@ -118,6 +121,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 // UpdateUsers swaps the live user set without closing the listener.
 func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.limits.Update(users)
 	m := buildAuthUsers(users)
 	s.users.Store(&m)
 	return nil
@@ -181,7 +185,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	up, down := s.pipeH2(w, r.Body, upstream, flusher)
+	up, down := s.pipeH2(w, r.Body, s.limits.Limit(userID, upstream), flusher)
 	if userID != 0 {
 		c := s.counterFor(userID)
 		c.upload.Add(up)
@@ -199,8 +203,8 @@ func (s *Server) pipeH2(w http.ResponseWriter, reqBody io.ReadCloser, upstream n
 		defer wg.Done()
 		n, _ := io.Copy(upstream, reqBody)
 		up = uint64(n)
-		if tcp, ok := upstream.(*net.TCPConn); ok {
-			tcp.CloseWrite()
+		if cw, ok := upstream.(interface{ CloseWrite() error }); ok {
+			cw.CloseWrite()
 		}
 	}()
 	go func() {

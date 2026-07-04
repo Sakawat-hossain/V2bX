@@ -15,6 +15,7 @@ import (
 
 	"github.com/Sakawat-hossain/V2bX/internal/online"
 	"github.com/Sakawat-hossain/V2bX/internal/protocol"
+	"github.com/Sakawat-hossain/V2bX/internal/ratelimit"
 	"github.com/Sakawat-hossain/V2bX/internal/relay"
 )
 
@@ -50,6 +51,7 @@ type Server struct {
 
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
+	limits   ratelimit.Store
 }
 
 // Online reports the source IPs each user is currently connected from.
@@ -101,6 +103,7 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 
 	s.listener = ln
 	s.cfg = cfg
+	s.limits.Update(cfg.Users)
 	s.users.Store(&users)
 
 	go s.acceptLoop(ln)
@@ -170,7 +173,7 @@ func (s *Server) handle(conn net.Conn) {
 	}
 	conn.SetDeadline(time.Time{})
 
-	up, down := relay.Pipe(conn, upstream)
+	up, down := relay.Pipe(conn, s.limits.Limit(userID, upstream))
 	if userID != 0 {
 		c := s.counterFor(userID)
 		c.upload.Add(up)
@@ -318,6 +321,7 @@ func writeReply(conn net.Conn, code byte) error {
 
 // UpdateUsers swaps the live user set without closing the listener.
 func (s *Server) UpdateUsers(users []protocol.User) error {
+	s.limits.Update(users)
 	m := buildAuthUsers(users)
 	s.users.Store(&m)
 	return nil
