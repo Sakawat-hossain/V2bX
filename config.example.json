@@ -18,6 +18,11 @@
     "alive_path": "/api/v1/server/UniProxy/alive"
   },
 
+  "metrics": {
+    "_comment": "Optional Prometheus-compatible /metrics endpoint. Bind to localhost or a private interface — it is unauthenticated. Omit or leave listen empty to disable.",
+    "listen": "127.0.0.1:9095"
+  },
+
   "nodes": [
     {
       "_comment": "Shadowsocks. cipher/port/users all come from the panel; local fields below are agent-side overrides.",

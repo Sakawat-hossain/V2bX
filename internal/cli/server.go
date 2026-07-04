@@ -3,19 +3,21 @@ package cli
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/Sakawat-hossain/V2bX/internal/config"
+	"github.com/Sakawat-hossain/V2bX/internal/metrics"
 	"github.com/Sakawat-hossain/V2bX/internal/service"
 )
 
 // RunServer loads the config at configPath and runs the agent in the
 // foreground until it receives SIGINT/SIGTERM. SIGHUP triggers an immediate
 // out-of-band panel resync (see ReloadService).
-func RunServer(configPath string) error {
+func RunServer(configPath, version string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return err
@@ -40,6 +42,24 @@ func RunServer(configPath string) error {
 			mgr.Sync(ctx)
 		}
 	}()
+
+	if addr := cfg.Metrics.Listen; addr != "" {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", metrics.Handler(mgr.Snapshot, version))
+		ms := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			logger.Info("metrics endpoint listening", "addr", addr)
+			if err := ms.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Warn("metrics server stopped", "error", err)
+			}
+		}()
+		go func() {
+			<-ctx.Done()
+			shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = ms.Shutdown(shutCtx)
+		}()
+	}
 
 	reportTicker := time.NewTicker(30 * time.Second)
 	defer reportTicker.Stop()

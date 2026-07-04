@@ -40,6 +40,19 @@ These paths are overridable, not because the API surface changes across
 panels, but so any fork or reverse proxy that renames routes still works
 without a code change.
 
+## Metrics
+
+Optional Prometheus-compatible metrics endpoint.
+
+| Field    | Type   | Default | Description |
+|----------|--------|---------|-------------|
+| `listen` | string | `""`    | Address to serve `/metrics` on, e.g. `127.0.0.1:9095`. Empty disables it. |
+
+The endpoint is **unauthenticated** — bind it to localhost or a private
+interface and scrape over that. It exposes `v2bx_up`, `v2bx_build_info`,
+per-node user/online/traffic gauges and counters, and panel push/sync
+success/failure counters.
+
 ## Node
 
 Each entry in `nodes` is one locally-run listener. Protocol type, listen

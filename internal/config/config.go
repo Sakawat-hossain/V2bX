@@ -10,9 +10,18 @@ import (
 
 // Config is the top-level agent configuration, loaded from config.json.
 type Config struct {
-	Log   LogConfig   `json:"log"`
-	Panel PanelConfig `json:"panel"`
-	Nodes []NodeEntry `json:"nodes"`
+	Log     LogConfig     `json:"log"`
+	Panel   PanelConfig   `json:"panel"`
+	Metrics MetricsConfig `json:"metrics,omitempty"`
+	Nodes   []NodeEntry   `json:"nodes"`
+}
+
+// MetricsConfig controls the Prometheus-compatible metrics endpoint.
+type MetricsConfig struct {
+	// Listen is the address to serve /metrics on, e.g. "127.0.0.1:9095".
+	// Empty disables it. Bind to localhost (or a private interface) and
+	// scrape over it — the endpoint is unauthenticated.
+	Listen string `json:"listen,omitempty"`
 }
 
 // LogConfig controls agent-wide logging.

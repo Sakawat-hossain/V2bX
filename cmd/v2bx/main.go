@@ -46,7 +46,7 @@ func main() {
 		fs := flag.NewFlagSet("server", flag.ExitOnError)
 		configPath := fs.String("c", defaultConfigPath, "path to config.json")
 		fs.Parse(os.Args[2:])
-		err = cli.RunServer(*configPath)
+		err = cli.RunServer(*configPath, Version)
 	case "menu":
 		err = cli.Menu(defaultConfigPath, Version)
 	case "generate":

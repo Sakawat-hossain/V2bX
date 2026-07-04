@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sakawat-hossain/V2bX/internal/config"
@@ -29,6 +30,59 @@ type Manager struct {
 	// confirmed. Deltas are computed against it and it only advances after a
 	// successful push, so a failed report is retried in full rather than lost.
 	acked map[int64]map[int64]protocol.UserTraffic
+
+	// Counters surfaced via the metrics endpoint.
+	pushOK, pushFail atomic.Uint64
+	syncOK, syncFail atomic.Uint64
+}
+
+// Snapshot is a point-in-time view of the agent's state for metrics.
+type Snapshot struct {
+	PushOK, PushFail uint64
+	SyncOK, SyncFail uint64
+	Nodes            []NodeSnapshot
+}
+
+// NodeSnapshot is the per-node slice of a Snapshot.
+type NodeSnapshot struct {
+	NodeID           int64
+	NodeType         string
+	Users            int
+	Online           int
+	Upload, Download uint64
+}
+
+// Snapshot reads live per-node state (user counts, online IPs, cumulative
+// traffic) plus the panel push/sync counters.
+func (m *Manager) Snapshot() Snapshot {
+	m.mu.Lock()
+	nodes := make([]*runningNode, 0, len(m.nodes))
+	for _, rn := range m.nodes {
+		nodes = append(nodes, rn)
+	}
+	m.mu.Unlock()
+
+	snap := Snapshot{
+		PushOK:   m.pushOK.Load(),
+		PushFail: m.pushFail.Load(),
+		SyncOK:   m.syncOK.Load(),
+		SyncFail: m.syncFail.Load(),
+	}
+	for _, rn := range nodes {
+		ns := NodeSnapshot{NodeID: rn.entry.NodeID, NodeType: rn.entry.NodeType}
+		if rn.lastGood != nil {
+			ns.Users = len(rn.lastGood.Users)
+		}
+		if r, ok := rn.server.(protocol.OnlineReporter); ok {
+			ns.Online = len(r.Online())
+		}
+		for _, tr := range rn.server.Stats().Users {
+			ns.Upload += tr.Upload
+			ns.Download += tr.Download
+		}
+		snap.Nodes = append(snap.Nodes, ns)
+	}
+	return snap
 }
 
 type runningNode struct {
@@ -120,9 +174,11 @@ func (m *Manager) syncNode(ctx context.Context, entry config.NodeEntry) {
 		return nil
 	})
 	if err != nil {
+		m.syncFail.Add(1)
 		m.logger.Warn("keeping last-known-good config after sync failure", "node_id", entry.NodeID, "error", err)
 		return
 	}
+	m.syncOK.Add(1)
 
 	m.applyNodeConfig(entry, nodeCfg)
 }
@@ -295,9 +351,11 @@ func (m *Manager) PushStats(ctx context.Context) error {
 		}
 		if err := m.client.PushTraffic(ctx, nodeID, rn.entry.NodeType, records); err != nil {
 			// Leave acked untouched so this delta is resent next tick.
+			m.pushFail.Add(1)
 			m.logger.Warn("push traffic failed, will retry", "node_id", nodeID, "error", err)
 			continue
 		}
+		m.pushOK.Add(1)
 		// Push confirmed — advance the acknowledged totals.
 		m.mu.Lock()
 		m.acked[nodeID] = next
