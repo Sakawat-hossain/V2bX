@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,18 @@ type Client struct {
 
 	httpClient *http.Client
 	logger     *slog.Logger
+
+	// cacheMu guards the ETag cache for GET endpoints. The panel returns an
+	// ETag on config/user and honors If-None-Match with a 304, so unchanged
+	// syncs transfer an empty body — a big saving at scale. On 304 we serve
+	// the last body back transparently, so callers never see the difference.
+	cacheMu sync.Mutex
+	cache   map[string]*cacheEntry
+}
+
+type cacheEntry struct {
+	etag string
+	body []byte
 }
 
 // Options configures a new Client. Paths default to the standard UniProxy
@@ -59,6 +72,7 @@ func New(opts Options) (*Client, error) {
 		alivePath:  firstNonEmpty(opts.AlivePath, "/api/v1/server/UniProxy/alive"),
 		httpClient: opts.HTTPClient,
 		logger:     opts.Logger,
+		cache:      map[string]*cacheEntry{},
 	}
 	if c.httpClient == nil {
 		c.httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -148,12 +162,52 @@ func (c *Client) ReportAlive(ctx context.Context, nodeID int64, nodeType string,
 	return nil
 }
 
+// get performs a conditional GET: it sends If-None-Match with the last ETag
+// seen for this endpoint and, on a 304, returns the cached body so callers
+// never have to care whether the data changed. On a 200 it caches the new
+// ETag and body.
 func (c *Client) get(ctx context.Context, path string, query url.Values) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(path, query), nil)
+	endpoint := c.endpoint(path, query)
+
+	c.cacheMu.Lock()
+	entry := c.cache[endpoint]
+	c.cacheMu.Unlock()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
-	return c.do(req)
+	if entry != nil && entry.etag != "" {
+		req.Header.Set("If-None-Match", entry.etag)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotModified {
+		if entry != nil {
+			return entry.body, nil
+		}
+		return nil, fmt.Errorf("panel: got 304 with no cached body")
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, truncate(body, 500))
+	}
+
+	if etag := resp.Header.Get("ETag"); etag != "" {
+		c.cacheMu.Lock()
+		c.cache[endpoint] = &cacheEntry{etag: etag, body: body}
+		c.cacheMu.Unlock()
+	}
+	return body, nil
 }
 
 func (c *Client) getJSON(ctx context.Context, path string, query url.Values, out any) error {

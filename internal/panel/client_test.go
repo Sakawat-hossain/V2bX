@@ -10,6 +10,46 @@ import (
 	"time"
 )
 
+func TestFetchUsersETagServesCacheOn304(t *testing.T) {
+	const etag = `"users-v1"`
+	var requests int
+	var got304 bool
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/server/UniProxy/user", func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.Header.Get("If-None-Match") == etag {
+			got304 = true
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", etag)
+		json.NewEncoder(w).Encode(UserListResponse{Users: []UserResponse{{ID: 7, UUID: "u7"}}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+
+	first, err := c.FetchUsers(context.Background(), 1, "shadowsocks")
+	if err != nil {
+		t.Fatalf("first FetchUsers: %v", err)
+	}
+	second, err := c.FetchUsers(context.Background(), 1, "shadowsocks")
+	if err != nil {
+		t.Fatalf("second FetchUsers: %v", err)
+	}
+
+	if !got304 {
+		t.Fatal("second request should have sent If-None-Match and received 304")
+	}
+	if requests != 2 {
+		t.Fatalf("expected 2 requests, got %d", requests)
+	}
+	if len(first) != 1 || len(second) != 1 || first[0].UUID != second[0].UUID {
+		t.Fatalf("304 should serve the cached body: first=%v second=%v", first, second)
+	}
+}
+
 func mockPanel(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
