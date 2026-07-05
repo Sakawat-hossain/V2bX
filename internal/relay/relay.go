@@ -65,13 +65,30 @@ func LimitListener(ln net.Listener, max int) net.Listener {
 	return netutil.LimitListener(ln, max)
 }
 
+// closeWrite half-closes the write side of conn so the peer sees EOF in one
+// direction while the other keeps flowing. Codec wrappers (e.g. the sing
+// Shadowsocks serverConn) don't expose CloseWrite themselves, so we unwrap
+// through their Upstream() chain to reach the underlying *net.TCPConn, whose
+// CloseWrite does a real half-close. Only if no layer offers CloseWrite do we
+// fall back to a full Close — which would otherwise truncate a still-active
+// transfer in the opposite direction.
 func closeWrite(conn net.Conn) {
-	type writeCloser interface {
-		CloseWrite() error
-	}
-	if wc, ok := conn.(writeCloser); ok {
-		wc.CloseWrite()
-		return
+	type writeCloser interface{ CloseWrite() error }
+	type upstreamer interface{ Upstream() any }
+	for {
+		if wc, ok := conn.(writeCloser); ok {
+			wc.CloseWrite()
+			return
+		}
+		u, ok := conn.(upstreamer)
+		if !ok {
+			break
+		}
+		next, ok := u.Upstream().(net.Conn)
+		if !ok {
+			break
+		}
+		conn = next
 	}
 	conn.Close()
 }
