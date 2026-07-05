@@ -334,6 +334,8 @@ func (s *Server) NewPacketConnection(ctx context.Context, conn N.PacketConn, met
 
 	var (
 		mu      sync.Mutex
+		writeMu sync.Mutex // serializes conn.WritePacket: the session writer's
+		//                   packet-id counter and RNG are not concurrency-safe
 		sockets = map[string]*net.UDPConn{}
 		wg      sync.WaitGroup
 	)
@@ -387,7 +389,10 @@ func (s *Server) NewPacketConnection(ctx context.Context, conn N.PacketConn, met
 						reply := buf.NewPacket()
 						reply.Resize(512, 0) // 512 bytes of front headroom, empty content
 						reply.Write(scratch[:n])
-						if wErr := conn.WritePacket(reply, d); wErr != nil {
+						writeMu.Lock()
+						wErr := conn.WritePacket(reply, d)
+						writeMu.Unlock()
+						if wErr != nil {
 							reply.Release()
 							return
 						}
