@@ -10,23 +10,31 @@ Supported ciphers (set via the panel, surfaced in agent config as
 
 - `aes-128-gcm`, `aes-192-gcm`, `aes-256-gcm`
 - `chacha20-ietf-poly1305`
-- `2022-blake3-aes-128-gcm`, `2022-blake3-aes-256-gcm`, `2022-blake3-chacha20-poly1305`
+- `2022-blake3-aes-128-gcm`, `2022-blake3-aes-256-gcm`
+  (`2022-blake3-chacha20-poly1305` has no multi-user service in the underlying
+  codec and is not supported — selecting it is rejected at start)
 
 Notes:
 
 - Classic AEAD ciphers derive the per-session key from an arbitrary-length
   password via the standard Shadowsocks HKDF construction — any password
   string works.
-- Shadowsocks-2022 ciphers expect the **pre-shared key as base64**, sized to
-  the cipher's key length before encoding: 16 bytes for
-  `2022-blake3-aes-128-gcm`, 32 bytes for `2022-blake3-aes-256-gcm` and
-  `2022-blake3-chacha20-poly1305`. Panels that generate 2022 passwords
-  already produce a correctly-sized base64 string; if you're hand-rolling
-  one, `openssl rand -base64 16` (or `32`) produces the right shape.
+- Shadowsocks-2022 ciphers need **two** base64 PSKs: a node-level
+  `server_key` (the panel pushes this in the node config) and a per-user key
+  (the user's password), both sized to the cipher's key length before
+  encoding — 16 bytes for `2022-blake3-aes-128-gcm`, 32 bytes for
+  `2022-blake3-aes-256-gcm`. If the panel doesn't send `server_key`, a 2022
+  node is rejected at start rather than serving with an empty PSK. Panels that
+  generate 2022 keys already produce correctly-sized base64; hand-rolling one,
+  `openssl rand -base64 16` (or `32`) produces the right shape.
 - Multi-user single-port operation is supported for both classic and 2022
   ciphers via the same PSK/password-keyed identity path — each panel user
   gets a distinct password on the same listener.
-- UDP is relayed on a best-effort, single-round-trip basis per association.
+- The node binds both TCP **and** UDP on the port, so DNS/QUIC-over-Shadowsocks
+  works. UDP is a full bidirectional relay (one upstream socket per
+  destination, replies pumped back for the life of the association) — not a
+  single round trip. A UDP bind failure is non-fatal: the node logs a warning
+  and serves TCP-only.
 
 ## VMess — done
 
