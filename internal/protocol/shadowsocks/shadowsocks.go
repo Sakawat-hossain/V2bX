@@ -389,11 +389,14 @@ func (s *Server) NewPacketConnection(ctx context.Context, conn N.PacketConn, met
 						reply := buf.NewPacket()
 						reply.Resize(512, 0) // 512 bytes of front headroom, empty content
 						reply.Write(scratch[:n])
+						// WritePacket takes ownership of reply and releases it on
+						// every path (success or error), so we must not release
+						// it again here — doing so would double-free the pooled
+						// buffer.
 						writeMu.Lock()
 						wErr := conn.WritePacket(reply, d)
 						writeMu.Unlock()
 						if wErr != nil {
-							reply.Release()
 							return
 						}
 						counter.download.Add(uint64(n))
