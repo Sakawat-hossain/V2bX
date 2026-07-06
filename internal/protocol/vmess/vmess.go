@@ -6,13 +6,16 @@ package vmess
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	vm "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/auth"
+	"github.com/sagernet/sing/common/buf"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
@@ -36,7 +39,11 @@ type Server struct {
 	counters sync.Map // int64 userID -> *userCounter
 	online   online.Tracker
 	limits   ratelimit.Store
+	logger   *slog.Logger
 }
+
+// udpTimeout bounds how long an idle upstream UDP socket lingers.
+const udpTimeout = 60 * time.Second
 
 // Online reports the source IPs each user is currently connected from.
 func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
@@ -46,7 +53,7 @@ type userCounter struct {
 	download atomic.Uint64
 }
 
-func New() *Server { return &Server{} }
+func New() *Server { return &Server{logger: slog.Default().With("protocol", "vmess")} }
 
 func (s *Server) Name() string { return "vmess" }
 
@@ -179,6 +186,8 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 
 	upstream, err := net.Dial("tcp", destination.String())
 	if err != nil {
+		// Usual "connected but no data" cause: node can't reach the destination.
+		s.logger.Debug("dial upstream failed", "dest", destination.String(), "error", err)
 		onClose(err)
 		return
 	}
@@ -190,8 +199,58 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 	onClose(nil)
 }
 
-// NewPacketConnectionEx implements sing-vmess's Handler (N.UDPConnectionHandlerEx).
-// UDP-over-VMess is not yet implemented; associations are rejected cleanly.
+// NewPacketConnectionEx implements sing-vmess's Handler (N.UDPConnectionHandlerEx):
+// UDP-over-VMess. The codec binds the packet conn to one destination, so we
+// dial a single upstream UDP socket and relay both ways for the association.
 func (s *Server) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	onClose(fmt.Errorf("vmess: UDP not supported"))
+	userID, _ := auth.UserFromContext[int64](ctx)
+	counter := s.counterFor(userID)
+	s.online.Mark(userID, online.IPString(source.String()))
+
+	upstream, err := net.Dial("udp", destination.String())
+	if err != nil {
+		s.logger.Debug("dial udp upstream failed", "dest", destination.String(), "error", err)
+		onClose(err)
+		return
+	}
+	uc := upstream.(*net.UDPConn)
+	defer uc.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		scratch := make([]byte, 64*1024)
+		for {
+			uc.SetReadDeadline(time.Now().Add(udpTimeout))
+			n, rErr := uc.Read(scratch)
+			if n > 0 {
+				reply := buf.NewPacket()
+				reply.Resize(16, 0)
+				reply.Write(scratch[:n])
+				if wErr := conn.WritePacket(reply, destination); wErr != nil {
+					return
+				}
+				counter.download.Add(uint64(n))
+			}
+			if rErr != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		buffer := buf.NewPacket()
+		if _, rErr := conn.ReadPacket(buffer); rErr != nil {
+			buffer.Release()
+			break
+		}
+		n := buffer.Len()
+		if _, wErr := uc.Write(buffer.Bytes()); wErr == nil {
+			counter.upload.Add(uint64(n))
+		}
+		buffer.Release()
+	}
+	uc.Close()
+	<-done
+	onClose(nil)
 }

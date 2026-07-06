@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -22,6 +23,7 @@ import (
 	"github.com/sagernet/reality"
 	svless "github.com/sagernet/sing-vmess/vless"
 	"github.com/sagernet/sing/common/auth"
+	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -50,7 +52,11 @@ type Server struct {
 	limits   ratelimit.Store
 	reality  *reality.Config
 	httpSrv  *http.Server // set when the transport is WebSocket
+	logger   *slog.Logger
 }
+
+// udpTimeout bounds how long an idle upstream UDP socket lingers.
+const udpTimeout = 60 * time.Second
 
 // Online reports the source IPs each user is currently connected from.
 func (s *Server) Online() map[int64][]string { return s.online.Snapshot() }
@@ -60,7 +66,7 @@ type userCounter struct {
 	download atomic.Uint64
 }
 
-func New() *Server { return &Server{} }
+func New() *Server { return &Server{logger: slog.Default().With("protocol", "vless")} }
 
 func (s *Server) Name() string { return "vless" }
 
@@ -92,6 +98,18 @@ func (s *Server) Start(cfg protocol.NodeConfig) error {
 		realityCfg, rerr = realityutil.BuildServerConfig(cfg.Reality)
 		if rerr != nil {
 			return fmt.Errorf("vless: node %d: reality: %w", cfg.NodeID, rerr)
+		}
+		// XTLS-Vision splices the underlying *crypto/tls.Conn; our Reality
+		// layer is a *reality.Conn that sing's Vision code doesn't recognize,
+		// so vision-flow users would authenticate and then get dropped with no
+		// data. Warn loudly and point at the fix instead of failing silently.
+		for _, u := range cfg.Users {
+			if u.Flow == svless.FlowVision {
+				s.logger.Warn("xtls-rprx-vision is not supported together with Reality in this build — "+
+					"set the node's user flow to none in the panel (Reality still works; only the Vision optimization is dropped)",
+					"node_id", cfg.NodeID)
+				break
+			}
 		}
 	}
 
@@ -168,11 +186,17 @@ func (s *Server) serveConn(ctx context.Context, conn net.Conn, source M.Socksadd
 	if rc != nil {
 		rconn, err := realityutil.ServerHandshake(ctx, conn, rc)
 		if err != nil {
+			s.logger.Debug("reality handshake failed", "source", source.String(), "error", err)
 			return
 		}
 		stream = rconn
 	}
-	svc.NewConnection(ctx, stream, source, func(error) {})
+	// The codec reads the VLESS request, authenticates the user, and dispatches
+	// to NewConnectionEx / NewPacketConnectionEx. Surface its error (unknown
+	// UUID, flow mismatch, vision-on-reality, etc.) so failures aren't silent.
+	if err := svc.NewConnection(ctx, stream, source, func(error) {}); err != nil {
+		s.logger.Debug("connection closed", "source", source.String(), "error", err)
+	}
 }
 
 // tlsWanted reports whether a VLESS node should terminate TLS itself.
@@ -276,6 +300,9 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 
 	upstream, err := net.Dial("tcp", destination.String())
 	if err != nil {
+		// This is the usual "connected but no data" cause: the node can't
+		// reach the destination (DNS failure, no outbound route, blocked).
+		s.logger.Debug("dial upstream failed", "dest", destination.String(), "error", err)
 		onClose(err)
 		return
 	}
@@ -288,7 +315,61 @@ func (s *Server) NewConnectionEx(ctx context.Context, conn net.Conn, source M.So
 }
 
 // NewPacketConnectionEx implements sing-vmess/vless's Handler
-// (N.UDPConnectionHandlerEx). UDP-over-VLess is not yet implemented.
+// (N.UDPConnectionHandlerEx): UDP-over-VLESS. The codec hands us a packet conn
+// bound to a single destination (VLESS carries the target in the request), so
+// we dial one upstream UDP socket and pump packets both ways for the life of
+// the association — this is what DNS and QUIC need.
 func (s *Server) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	onClose(fmt.Errorf("vless: UDP not supported"))
+	userID, _ := auth.UserFromContext[int64](ctx)
+	counter := s.counterFor(userID)
+	s.online.Mark(userID, online.IPString(source.String()))
+
+	upstream, err := net.Dial("udp", destination.String())
+	if err != nil {
+		s.logger.Debug("dial udp upstream failed", "dest", destination.String(), "error", err)
+		onClose(err)
+		return
+	}
+	uc := upstream.(*net.UDPConn)
+	defer uc.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		scratch := make([]byte, 64*1024)
+		for {
+			uc.SetReadDeadline(time.Now().Add(udpTimeout))
+			n, rErr := uc.Read(scratch)
+			if n > 0 {
+				// Reserve front headroom for the codec's 2-byte length prefix.
+				reply := buf.NewPacket()
+				reply.Resize(16, 0)
+				reply.Write(scratch[:n])
+				// WritePacket takes ownership of reply on every path.
+				if wErr := conn.WritePacket(reply, destination); wErr != nil {
+					return
+				}
+				counter.download.Add(uint64(n))
+			}
+			if rErr != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		buffer := buf.NewPacket()
+		if _, rErr := conn.ReadPacket(buffer); rErr != nil {
+			buffer.Release()
+			break
+		}
+		n := buffer.Len()
+		if _, wErr := uc.Write(buffer.Bytes()); wErr == nil {
+			counter.upload.Add(uint64(n))
+		}
+		buffer.Release()
+	}
+	uc.Close()
+	<-done
+	onClose(nil)
 }

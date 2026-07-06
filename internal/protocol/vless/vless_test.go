@@ -122,6 +122,71 @@ func TestStartStopAndRelay(t *testing.T) {
 	}
 }
 
+// TestUDPRelay drives UDP-over-VLESS end to end: it proves DNS/QUIC-style
+// datagrams reach an upstream and the replies come back (multiple packets),
+// which is what "no internet" clients need beyond TCP.
+func TestUDPRelay(t *testing.T) {
+	port := freePort(t)
+	srv := New()
+	const testUUID = "b831381d-6324-4d53-ad4f-8cda48b30811"
+	cfg := protocol.NodeConfig{
+		NodeID: 2, NodeType: "vless", ListenIP: "127.0.0.1", Port: port,
+		Users: []protocol.User{{ID: 66, UUID: testUUID}},
+	}
+	if err := srv.Start(cfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer srv.Stop()
+
+	uln, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatalf("udp echo: %v", err)
+	}
+	defer uln.Close()
+	go func() {
+		b := make([]byte, 2048)
+		for {
+			n, from, err := uln.ReadFromUDP(b)
+			if err != nil {
+				return
+			}
+			uln.WriteToUDP(b[:n], from)
+		}
+	}()
+
+	client, err := svless.NewClient(testUUID, "", logger.NOP())
+	if err != nil {
+		t.Fatalf("client: %v", err)
+	}
+	raw, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 5*time.Second)
+	if err != nil {
+		t.Fatalf("dial proxy: %v", err)
+	}
+	defer raw.Close()
+
+	dest := M.SocksaddrFromNet(uln.LocalAddr())
+	pc, err := client.DialPacketConn(raw, dest)
+	if err != nil {
+		t.Fatalf("DialPacketConn: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		payload := []byte("udp-vless-" + strconv.Itoa(i))
+		if _, err := pc.Write(payload); err != nil {
+			t.Fatalf("Write %d: %v", i, err)
+		}
+		raw.SetReadDeadline(time.Now().Add(3 * time.Second))
+		rb := make([]byte, 2048)
+		n, err := pc.Read(rb)
+		if err != nil {
+			t.Fatalf("Read %d (no UDP data returned): %v", i, err)
+		}
+		if string(rb[:n]) != string(payload) {
+			t.Fatalf("udp echo %d mismatch: got %q want %q", i, rb[:n], payload)
+		}
+	}
+}
+
 func TestStartMissingUsers(t *testing.T) {
 	srv := New()
 	cfg := protocol.NodeConfig{NodeID: 2, Port: freePort(t)}
