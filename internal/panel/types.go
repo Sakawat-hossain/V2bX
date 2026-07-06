@@ -21,6 +21,9 @@ type NodeConfigResponse struct {
 	ServerName string `json:"server_name,omitempty"`
 	TLS        int    `json:"tls,omitempty"`     // 0=none 1=tls 2=reality/xtls, panel-defined
 	Network    string `json:"network,omitempty"` // tcp|ws|grpc — VLESS/VMess transport
+	// Flow is the VLESS flow control the panel assigns node-wide, e.g.
+	// "xtls-rprx-vision". The panel may send JSON null, which decodes to "".
+	Flow string `json:"flow,omitempty"`
 
 	// Hysteria/Hysteria2 knobs the panel pushes down. UpMbps/DownMbps drive
 	// the Brutal congestion control (0 = client-decides); Obfs is the
@@ -57,6 +60,43 @@ func (r NodeConfigResponse) ListenPort() int {
 		return r.ServerPort
 	}
 	return r.Port
+}
+
+// tlsSetting reads a string value out of the panel's tls_settings object.
+func (r NodeConfigResponse) tlsSetting(key string) string {
+	if r.TLSSettings == nil {
+		return ""
+	}
+	if v, ok := r.TLSSettings[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// RealityFromPanel builds the Reality parameters the panel published under
+// tls_settings when the node is in Reality mode (tls == 2). It returns the
+// dest ("host:port"), the accepted server names, the base64 private key, and
+// the hex short IDs — everything a Reality server needs — so the operator only
+// configures Reality in the panel, never in the local file. ok is false when
+// the node isn't Reality or the panel didn't include the key material.
+func (r NodeConfigResponse) RealityFromPanel() (dest string, serverNames []string, privateKey string, shortIDs []string, ok bool) {
+	if r.TLS != 2 {
+		return "", nil, "", nil, false
+	}
+	sni := r.tlsSetting("server_name")
+	privateKey = r.tlsSetting("private_key")
+	if sni == "" || privateKey == "" {
+		return "", nil, "", nil, false
+	}
+	port := r.tlsSetting("server_port")
+	if port == "" {
+		port = "443"
+	}
+	shortIDs = []string{""} // always accept the empty short ID
+	if sid := r.tlsSetting("short_id"); sid != "" {
+		shortIDs = append(shortIDs, sid)
+	}
+	return sni + ":" + port, []string{sni}, privateKey, shortIDs, true
 }
 
 // UserResponse is a single entry from GET {user_path}. The panel does not

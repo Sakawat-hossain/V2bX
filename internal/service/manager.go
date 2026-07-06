@@ -227,6 +227,21 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 	if remoteCfg.ServerKey != "" {
 		nc.Extra["server_key"] = remoteCfg.ServerKey
 	}
+
+	// Reality: a local `reality` block is an explicit override; otherwise take
+	// the parameters straight from the panel (tls_settings), so the operator
+	// configures Reality only in XBoard and key rotations flow through on the
+	// next sync without touching config.json.
+	if nc.Reality == nil {
+		if dest, names, priv, sids, ok := remoteCfg.RealityFromPanel(); ok {
+			nc.Reality = &protocol.RealityConfig{
+				Dest:        dest,
+				ServerNames: names,
+				PrivateKey:  priv,
+				ShortIDs:    sids,
+			}
+		}
+	}
 	for _, u := range users {
 		// The panel doesn't send a separate password — the user's UUID is the
 		// credential for Shadowsocks, Trojan, TUIC, etc.
@@ -242,8 +257,15 @@ func (m *Manager) fetchNodeConfig(ctx context.Context, entry config.NodeEntry) (
 		if deviceLimit == 0 {
 			deviceLimit = entry.Limits.DeviceLimit
 		}
+		// VLESS flow is assigned node-wide in XBoard (tls/flow on /config),
+		// not per user, so fall back to the panel's node-level flow when the
+		// user record doesn't carry one.
+		flow := u.Flow
+		if flow == "" {
+			flow = remoteCfg.Flow
+		}
 		nc.Users = append(nc.Users, protocol.User{
-			ID: u.ID, UUID: u.UUID, Password: password, Flow: u.Flow,
+			ID: u.ID, UUID: u.UUID, Password: password, Flow: flow,
 			SpeedLimit: speedLimit, DeviceLimit: deviceLimit,
 		})
 	}

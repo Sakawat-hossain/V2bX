@@ -10,6 +10,44 @@ import (
 	"time"
 )
 
+// TestRealityFromPanel parses the exact XBoard /config payload a VLESS-Reality
+// node returns, so the panel-driven Reality extraction stays wired to the real
+// contract (note flow:null and the tls_settings shape).
+func TestRealityFromPanel(t *testing.T) {
+	raw := `{"protocol":"vless","listen_ip":"0.0.0.0","server_port":12365,"network":"tcp",
+	"networkSettings":{"header":{"type":"none"}},"tls":2,"flow":null,"decryption":null,
+	"tls_settings":{"server_name":"saas.sin.fan","server_port":"443",
+	"public_key":"MoB2UDLsYCKZlBk2LqI-K1V3s5i4z7L7EH0frPXAIho",
+	"private_key":"74ptK7fbVkfemhVIxtNseN4xOxxyAO8K-RTsLKJyNsI",
+	"short_id":"699ed9cd73996b8a","allow_insecure":false},
+	"base_config":{"push_interval":60,"pull_interval":60}}`
+
+	var cfg NodeConfigResponse
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Flow != "" {
+		t.Fatalf("flow null should decode to empty, got %q", cfg.Flow)
+	}
+	dest, names, priv, sids, ok := cfg.RealityFromPanel()
+	if !ok {
+		t.Fatal("expected Reality params from panel")
+	}
+	if dest != "saas.sin.fan:443" {
+		t.Fatalf("dest = %q", dest)
+	}
+	if len(names) != 1 || names[0] != "saas.sin.fan" {
+		t.Fatalf("server_names = %v", names)
+	}
+	if priv != "74ptK7fbVkfemhVIxtNseN4xOxxyAO8K-RTsLKJyNsI" {
+		t.Fatalf("private_key = %q", priv)
+	}
+	// Empty short ID plus the panel's, so clients sending either authenticate.
+	if len(sids) != 2 || sids[0] != "" || sids[1] != "699ed9cd73996b8a" {
+		t.Fatalf("short_ids = %v", sids)
+	}
+}
+
 func TestFetchUsersETagServesCacheOn304(t *testing.T) {
 	const etag = `"users-v1"`
 	var requests int
