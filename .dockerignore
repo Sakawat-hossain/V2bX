@@ -1,9 +1,0 @@
-.git
-.github
-docs
-*.md
-config.json
-*.log
-bin
-dist
-logo.png

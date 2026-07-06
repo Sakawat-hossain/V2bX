@@ -1,8 +1,24 @@
-/bin/
-/dist/
+# Built binaries
+/V2bX
+/v2bx
 *.exe
-*.test
-config.json
+
+# Geo routing data — large, downloaded at deploy time, must NOT be committed
+*.dat
+*.db
+example/geoip.dat
+example/geoip.db
+example/geosite.dat
+example/geosite.db
+
+# Real runtime config / secrets (keep only example/*.json templates)
+/config.json
+/etc/
 *.log
+
+# Go / editor
+/dist/
+vendor/
 .idea/
 .vscode/
+.DS_Store

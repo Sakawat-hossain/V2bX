@@ -1,159 +1,101 @@
 <div align="center">
 
-<img src=".github/assets/banner.png" alt="V2bX" width="820">
+# V2bX
 
-### One Go binary. Twelve protocols. Built for the real world.
+### Multi-core node backend (Xray · sing-box · Hysteria2) for XBoard / V2Board
 
-A clean-room node agent for **XBoard**, **V2Board**, and anything else that speaks the UniProxy node API — it pulls your node config and subscriber list on an interval, runs the listeners, reports traffic and online devices back, and holds up under DPI, throttling, and active probing.
+A multi-protocol node agent for **XBoard**, **V2Board**, and anything that speaks the UniProxy node API — it pulls node config and the subscriber list from the panel on an interval, runs the protocol inbounds, and reports traffic and online devices back. It embeds the **Xray-core**, **sing-box**, and **Hysteria2** cores, with native **Reality** and **XTLS-Vision** support.
 
-<br>
-
-[![CI](https://img.shields.io/github/actions/workflow/status/Sakawat-hossain/V2bX/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0B0E14&color=0AB2F9)](https://github.com/Sakawat-hossain/V2bX/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Sakawat-hossain/V2bX?style=flat-square&label=release&labelColor=0B0E14&color=7C3AED)](https://github.com/Sakawat-hossain/V2bX/releases)
-[![Go](https://img.shields.io/badge/Go-1.25-0AB2F9?style=flat-square&labelColor=0B0E14&logo=go&logoColor=white)](go.mod)
-[![Protocols](https://img.shields.io/badge/protocols-12-7C3AED?style=flat-square&labelColor=0B0E14)](docs/PROTOCOLS.md)
-[![License](https://img.shields.io/badge/license-MIT-A16FEE?style=flat-square&labelColor=0B0E14)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26-0AB2F9?style=flat-square&labelColor=0B0E14&logo=go&logoColor=white)](go.mod)
+[![License](https://img.shields.io/badge/license-MPL--2.0-A16FEE?style=flat-square&labelColor=0B0E14)](LICENSE)
 
-**English** · [简体中文](README.zh-CN.md)
+📖 **The primary documentation is in Simplified Chinese — see [简体中文（主文档）](README.zh-CN.md).** This English page is a secondary translation.
+
+[简体中文（主文档）](README.zh-CN.md) · **English**
 
 </div>
 
 ---
 
-## Protocols
+## Features
 
-Every node type runs independently and can be toggled per node. They're grouped by **how each one secures the wire** — the axis that decides what a node needs (a cert, a cipher, nothing) and how it looks on the network.
+- **Multiple cores** — `xray` (Xray-core), `sing` (sing-box), and `hysteria2`, selectable per node.
+- **Protocols** — Shadowsocks, VLESS (incl. **Reality + XTLS-Vision**), VMess, Trojan, Hysteria2, SOCKS, plus TUIC / AnyTLS where the core supports them.
+- **Panel integration** — the XBoard / V2Board UniProxy API: fetch node config and users, report traffic, report online device IPs.
+- **Certificates** — `none` / `self` / `http` / `dns` (ACME, optional DNS provider) / `reality`.
+- **Deployment** — single binary + systemd, for Linux `amd64 / arm64 / armv7 / armv6 / armv5 / s390x / riscv64`, on Ubuntu / Debian / CentOS / Alpine / Arch.
 
-| Node type | Wire | Needs cert | Highlights |
-|-----------|------|:----------:|------------|
-| **Shadowsocks** | Self-encrypted TCP (AEAD) | — | 7 ciphers incl. Shadowsocks-2022 blake3 |
-| **VMess** | Self-encrypted TCP (AEAD) | — | Single-port multi-user |
-| **VLess** | Self-encrypted TCP | optional | XTLS/Vision flow · **Reality** · **WebSocket/CDN** |
-| **Trojan** | TLS-wrapped TCP | auto | SHA-224 auth · **decoy fallback** |
-| **Naive** | TLS-wrapped HTTP/2 CONNECT | auto | HTTP Basic per user |
-| **AnyTLS** | TLS-wrapped session | auto | Padding scheme, SHA-256 auth |
-| **Hysteria** | QUIC / UDP | auto | Brutal bandwidth · **port hopping** |
-| **Hysteria2** | QUIC / UDP | auto | Brutal · **Salamander obfs** · port hopping |
-| **TUIC** | QUIC / UDP | auto | UUID + password · port hopping |
-| **SOCKS5** | Plaintext | — | Optional user/password auth |
-| **HTTP** | Plaintext | — | CONNECT + forward, optional auth |
-| **Mieru** | Obfuscated transport | — | TCP or UDP transport |
+## Install
 
-For any TLS/QUIC node, a self-signed certificate is generated automatically when you don't supply one. Full protocol notes: **[docs/PROTOCOLS.md](docs/PROTOCOLS.md)**.
-
-Adding a protocol never touches the panel-sync or CLI layers — each backend satisfies one small interface and registers itself:
-
-```go
-type ProtocolServer interface {
-    Start(cfg NodeConfig) error
-    Stop() error
-    Stats() UsageStats
-    Name() string
-}
-```
-
-## Built for production
-
-- **Traffic accounting that doesn't lose money** — usage is reported as a delta since the panel's last acknowledgement; a failed push is retried in full, never dropped.
-- **Hot user reload** — adding or removing a subscriber updates the node *in place* (where the codec supports it) instead of dropping every active connection each sync.
-- **Device / IP limits** — the node reports each user's source IPs via `/alive`; the panel enforces the limit across your whole fleet.
-- **Per-user speed limits** — a shared token bucket per user, so opening more connections can't multiply their bandwidth.
-- **Efficient sync** — conditional `GET` with ETag/`304`, so unchanged config/user pulls transfer an empty body.
-- **Metrics** — an optional Prometheus `/metrics` endpoint (nodes, online users, traffic, panel push/sync health).
-- **Safety valves** — optional per-node connection cap, pooled relay buffers, and a **hardened systemd unit** (dropped capabilities, read-only filesystem, syscall filter).
-
-## Built for restricted regions
-
-- **Reality** (VLESS) — borrows a real site's TLS handshake; any connection that isn't an authorized client is transparently proxied to that real site, so an active prober finds a genuine website, not a proxy. Fails closed on a partial config.
-- **Brutal congestion control** (Hysteria/Hysteria2) — `up_mbps`/`down_mbps` cap the rate and enable Brutal, which ignores packet loss, so throughput holds up on links the network throttles by injecting loss.
-- **Salamander obfuscation** (Hysteria2) — hides the QUIC handshake from DPI classifiers.
-- **Port hopping** (Hysteria/Hysteria2/TUIC) — the agent installs an `iptables` redirect from a UDP port range to the node port, so clients spray the range to evade per-flow throttling and single-port blocking.
-- **Trojan decoy fallback** — forward unauthenticated connections to a real backend instead of resetting them.
-- **VLESS-WebSocket** — run behind a CDN (e.g. Cloudflare) whose IPs are hard to block.
-
-> ⚠️ **Deploy anti-censorship features canary-first.** A wrong Reality/CDN config is a stable fingerprint that can get every IP sharing it blocked at once — roll out to one or two nodes and watch them before going fleet-wide. See [docs/PROTOCOLS.md](docs/PROTOCOLS.md).
-
-## Panel compatibility
-
-V2bX speaks the UniProxy HTTP API shared across the V2board family:
-
-| Call | Purpose |
-|------|---------|
-| `GET  {config_path}` | node config — protocol, port, cipher, TLS |
-| `GET  {user_path}` | the node's current subscriber list |
-| `POST {push_path}` | per-user traffic usage |
-| `POST {alive_path}` | currently-online users / device IPs |
-
-Base URL, API key, and all four paths are **config-driven**, so one binary targets XBoard, V2Board, or any compatible fork without a code change. If the panel goes briefly unreachable, sync retries with exponential backoff and every node keeps serving on its last-known-good config.
-
-## Quick install
+One-line script (Linux, as root):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/install.sh -o install.sh
-sudo bash install.sh install
+wget -N https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/V2bX-script-master/install.sh && bash install.sh
 ```
 
-That drops the binary at `/usr/local/bin/v2bx`, installs the hardened systemd unit, and offers to run the **interactive config wizard** — answer a few prompts (panel URL, API key, node type) and it writes `/etc/v2bx/config.json` and starts the service. No hand-editing JSON to get going.
+> Note: the bundled script pulls the binary from the upstream releases by default. After you publish releases on your own repo, update the download URL in the script accordingly.
 
-Prefer a menu to memorizing commands? Just run `sudo v2bx`.
-
-## Commands
-
-Run `v2bx` with no arguments for an interactive menu, or use any command directly:
-
-| Command | Does |
-|---------|------|
-| `v2bx` | open the interactive menu |
-| `v2bx generate` · `add` · `del` · `edit` | build / edit the config (`-c PATH` optional) |
-| `v2bx server [-c PATH]` | run the agent in the foreground (what systemd runs) |
-| `v2bx start` · `stop` · `restart` · `status` | manage the systemd service |
-| `v2bx enable` · `disable` | toggle start-on-boot |
-| `v2bx reload` | force an immediate panel resync (SIGHUP) |
-| `v2bx log` | follow the service journal |
-| `v2bx update` | update to the latest release in place |
-| `v2bx x25519` | generate an X25519 key pair (Reality) |
-| `v2bx bbr` · `firewall` | enable BBR · open inbound ports |
-| `v2bx uninstall` · `version` | remove the service · print version |
-
-## Docker
-
-A multi-arch image (`linux/amd64`, `linux/arm64`) is published to GHCR on every release.
-
-```bash
-mkdir config
-docker run --rm -it -v "$PWD/config:/etc/v2bx" \
-  ghcr.io/sakawat-hossain/v2bx:latest generate   # writes config, one time
-docker compose up -d                             # see docker-compose.yml
-```
+Or build from source (see the bottom of this page).
 
 ## Configuration
 
-A single JSON file (default `/etc/v2bx/config.json`). [`config.example.json`](config.example.json) has every node type worked out end to end; [docs/CONFIG.md](docs/CONFIG.md) is the field-by-field reference.
+The default config file is `/etc/V2bX/config.json`; see [example/config.json](example/config.json) for a full example. The shape (keys are case-sensitive):
 
 ```jsonc
 {
-  "log":     { "level": "info", "output": "stdout" },
-  "panel":   { "api_host": "https://panel.example.com", "api_key": "…", "sync_interval_seconds": 60 },
-  "metrics": { "listen": "127.0.0.1:9095" },
-  "nodes": [
-    { "node_id": 1, "node_type": "shadowsocks", "enabled": true, "listen_ip": "0.0.0.0" }
+  "Log": { "Level": "info", "Output": "" },
+  "Cores": [
+    {
+      "Type": "sing",
+      "Log": { "Level": "info", "Timestamp": true },
+      "OriginalPath": "/etc/V2bX/sing_origin.json"
+    }
+  ],
+  "Nodes": [
+    {
+      "Core": "sing",
+      "ApiHost": "https://panel.example.com",
+      "ApiKey": "panel node communication key / token",
+      "NodeID": 1,
+      "NodeType": "vless",
+      "ListenIP": "0.0.0.0",
+      "EnableSniff": true,
+      "CertConfig": { "CertMode": "none" }
+    }
   ]
 }
 ```
 
+- **`Cores`** — the cores you enable (`sing` / `xray` / `hysteria2`); each node picks one via its `Core` field.
+- **`NodeType`** — `shadowsocks` / `vless` / `vmess` / `trojan` / `hysteria2` / `socks`, matching the panel.
+- **`CertConfig.CertMode`** — `none` / `self` / `http` / `dns` / `reality`.
+- **VLESS-Reality / XTLS-Vision** — configured on the node in the panel (dest, keys, short ID, flow) and handled by the core; the agent reads it from the panel config, so you don't hand-write keys.
+
+## Commands
+
+| Command | Does |
+|---------|------|
+| `V2bX server -c /etc/V2bX/config.json` | run the agent in the foreground (what systemd runs) |
+| `V2bX start` · `stop` · `restart` | manage the systemd service |
+| `V2bX log` | view the service log |
+| `V2bX x25519` | generate a Reality X25519 key pair |
+| `V2bX synctime` | sync system time (Reality is time-sensitive) |
+| `V2bX update` · `uninstall` | update / remove |
+| `V2bX version` | print version |
+
 ## Build from source
 
 ```bash
-go build -o v2bx ./cmd/v2bx      # needs Go 1.25+
-go test ./...
+go build -o V2bX      # needs Go 1.26+
 ```
 
-Tagging `vX.Y.Z` triggers CI to cross-compile `linux/amd64`, `linux/arm64`, and `linux/armv7`, publish the tarballs to Releases, and push a multi-arch Docker image.
+At runtime it needs the geo data files (`geoip.dat` / `geosite.dat`, and optionally `geoip.db` / `geosite.db`) — these are fetched by the install script or at deploy time and are not shipped in the repo.
 
-## Contributing
+## Maintainer
 
-New protocols and fixes are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**, especially the walkthrough for adding a protocol behind the `ProtocolServer` interface. This is a clean-room implementation: original design, no logic ported from other node agents; depending on protocol SDKs as Go modules is fine.
+Sakawat Hossain
 
 ## License
 
-[MIT](LICENSE) · built on the excellent [sing](https://github.com/sagernet/sing), [sing-quic](https://github.com/sagernet/sing-quic), [reality](https://github.com/sagernet/reality), [mieru](https://github.com/enfein/mieru), and [sing-anytls](https://github.com/anytls/sing-anytls) libraries.
+[MPL-2.0](LICENSE). This project is based on [Shannon-x/V2bX](https://github.com/Shannon-x/V2bX) (a fork of [InazumaV/V2bX](https://github.com/InazumaV/V2bX)) and distributed under the Mozilla Public License 2.0; the upstream attribution and license notices are retained as the license requires.
