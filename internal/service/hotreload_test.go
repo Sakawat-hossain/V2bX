@@ -100,3 +100,46 @@ func TestHotReloadFallsBackToRestartOnError(t *testing.T) {
 		t.Fatalf("error fallback: got updates=%d starts=%d stops=%d, want 1/1/1", fake.updates, fake.starts, fake.stops)
 	}
 }
+
+// TestRealityChangeRestarts guards the fix for listenerEqual ignoring Reality:
+// rotating a Reality key (same port/cipher/TLS/users) must restart the node so
+// the new key actually takes effect, not be treated as "nothing changed".
+func TestRealityChangeRestarts(t *testing.T) {
+	mgr := newTestManager()
+	entry := config.NodeEntry{NodeID: 1, NodeType: "vless", Enabled: true}
+	reality1 := &protocol.RealityConfig{Dest: "a.com:443", ServerNames: []string{"a.com"}, PrivateKey: "KEY_OLD"}
+	v1 := &protocol.NodeConfig{NodeID: 1, Port: 1000, Users: []protocol.User{{ID: 1, UUID: "u"}}, Reality: reality1}
+	fake := &fakeUpdatable{}
+	mgr.nodes[1] = &runningNode{entry: entry, server: fake, lastGood: v1}
+
+	// Only the Reality private key changed → must rebind (restart), not no-op.
+	reality2 := &protocol.RealityConfig{Dest: "a.com:443", ServerNames: []string{"a.com"}, PrivateKey: "KEY_NEW"}
+	v2 := &protocol.NodeConfig{NodeID: 1, Port: 1000, Users: []protocol.User{{ID: 1, UUID: "u"}}, Reality: reality2}
+	mgr.applyNodeConfig(entry, v2)
+
+	if fake.stops != 1 || fake.starts != 1 || fake.updates != 0 {
+		t.Fatalf("reality change: got updates=%d starts=%d stops=%d, want 0/1/1", fake.updates, fake.starts, fake.stops)
+	}
+	if mgr.nodes[1].lastGood != v2 {
+		t.Fatal("lastGood not advanced after reality-change restart")
+	}
+}
+
+// TestServerKeyChangeRestarts guards that a Shadowsocks-2022 server_key change
+// (carried in Extra) forces a restart rather than being ignored.
+func TestServerKeyChangeRestarts(t *testing.T) {
+	mgr := newTestManager()
+	entry := config.NodeEntry{NodeID: 1, NodeType: "shadowsocks", Enabled: true}
+	v1 := &protocol.NodeConfig{NodeID: 1, Port: 1000, Cipher: "2022-blake3-aes-128-gcm",
+		Users: []protocol.User{{ID: 1, Password: "a"}}, Extra: map[string]any{"server_key": "OLD"}}
+	fake := &fakeUpdatable{}
+	mgr.nodes[1] = &runningNode{entry: entry, server: fake, lastGood: v1}
+
+	v2 := &protocol.NodeConfig{NodeID: 1, Port: 1000, Cipher: "2022-blake3-aes-128-gcm",
+		Users: []protocol.User{{ID: 1, Password: "a"}}, Extra: map[string]any{"server_key": "NEW"}}
+	mgr.applyNodeConfig(entry, v2)
+
+	if fake.stops != 1 || fake.starts != 1 || fake.updates != 0 {
+		t.Fatalf("server_key change: got updates=%d starts=%d stops=%d, want 0/1/1", fake.updates, fake.starts, fake.stops)
+	}
+}

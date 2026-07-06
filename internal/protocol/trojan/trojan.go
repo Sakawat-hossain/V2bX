@@ -195,7 +195,9 @@ func (s *Server) handle(conn net.Conn) {
 	var preUp uint64
 	if n := reader.Buffered(); n > 0 {
 		buffered := make([]byte, n)
-		reader.Read(buffered)
+		if _, err := io.ReadFull(reader, buffered); err != nil {
+			return
+		}
 		if _, err := upstream.Write(buffered); err != nil {
 			return
 		}

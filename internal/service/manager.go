@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -313,11 +315,37 @@ func (m *Manager) applyNodeConfig(entry config.NodeEntry, nc *protocol.NodeConfi
 		"listen", fmt.Sprintf("%s:%d", nc.ListenIP, nc.Port), "users", len(nc.Users))
 }
 
-// listenerEqual reports whether the listener-level config (everything that
-// requires rebinding the socket) is unchanged between a and b. When true, a
-// difference must be purely in the user set.
+// listenerEqual reports whether the listener-level config (everything applied
+// at Start and not hot-reloadable) is unchanged between a and b. When true, a
+// difference must be purely in the user set, so a live UpdateUsers is safe.
+// Every field here forces a restart when it changes — notably Reality, so
+// rotating a Reality key actually takes effect instead of being ignored.
 func listenerEqual(a, b *protocol.NodeConfig) bool {
-	return a.Port == b.Port && a.Cipher == b.Cipher && a.TLS == b.TLS
+	return a.ListenIP == b.ListenIP &&
+		a.Port == b.Port &&
+		a.Cipher == b.Cipher &&
+		a.TLS == b.TLS &&
+		a.Obfs == b.Obfs &&
+		a.UpMbps == b.UpMbps &&
+		a.DownMbps == b.DownMbps &&
+		a.PortHopRange == b.PortHopRange &&
+		a.FallbackAddr == b.FallbackAddr &&
+		a.Transport == b.Transport &&
+		a.WSPath == b.WSPath &&
+		a.MaxConnections == b.MaxConnections &&
+		realityEqual(a.Reality, b.Reality) &&
+		reflect.DeepEqual(a.Extra, b.Extra)
+}
+
+// realityEqual deep-compares two optional Reality configs.
+func realityEqual(a, b *protocol.RealityConfig) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Dest == b.Dest &&
+		a.PrivateKey == b.PrivateKey &&
+		slices.Equal(a.ServerNames, b.ServerNames) &&
+		slices.Equal(a.ShortIDs, b.ShortIDs)
 }
 
 func configEqual(a, b *protocol.NodeConfig) bool {
