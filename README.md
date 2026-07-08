@@ -4,8 +4,7 @@
 
 <br>
 
-### Multi-Core Multi-Protocol Node Backend  
-### Powered by **Xray-core · sing-box · Hysteria2**
+### Multi-Core Multi-Protocol Node Backend Powered by Xray-core · Sing-box
 
 **Built for XBoard / V2Board — Native Reality, XTLS-Vision & Modern Transport Support**
 
@@ -17,7 +16,7 @@
 
 <br>
 
-📖 Primary documentation: **[简体中文（主文档）](README.zh-CN.md)**  · **English** [简体中文（主文档）](README.zh-CN.md) 
+📖 Primary documentation: **[简体中文（主文档）](README.zh-CN.md)**   · **English** [简体中文（主文档）](README.zh-CN.md) 
 
 </div>
 
