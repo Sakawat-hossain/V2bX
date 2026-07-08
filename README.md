@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="logo.png" alt="V2bX" width="140">
+<img src="logo.png" alt="V2bX" width="100%">
 
-# V2bX
+<br>
 
-**Multi-core node backend · Xray · sing-box · Hysteria2**
+### Multi-Core Multi-Protocol Node Backend  
+### Powered by **Xray-core · sing-box · Hysteria2**
 
-For XBoard / V2Board — with native Reality and XTLS-Vision
+**Built for XBoard / V2Board — Native Reality, XTLS-Vision & Modern Transport Support**
 
 <br>
 
@@ -14,29 +15,84 @@ For XBoard / V2Board — with native Reality and XTLS-Vision
 [![Go](https://img.shields.io/badge/GO-1.26-0AB2F9?style=for-the-badge&labelColor=0B0E14&logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/LICENSE-MPL--2.0-A16FEE?style=for-the-badge&labelColor=0B0E14)](LICENSE)
 
-📖 The primary documentation is in **[简体中文（主文档）](README.zh-CN.md)**. This English page is a secondary translation.
+<br>
 
-[简体中文（主文档）](README.zh-CN.md) · **English**
+📖 Primary documentation: **[简体中文（主文档）](README.zh-CN.md)**  · **English** [简体中文（主文档）](README.zh-CN.md) 
 
 </div>
 
+
+# V2bX
+
+**V2bX** is a high-performance, multi-protocol VPN node backend designed for **XBoard**, **V2Board**, and other **UniProxy-compatible panels**.
+
+Powered by **Xray-core**, **sing-box**, and **Hysteria2** engines, V2bX provides a modern, scalable node architecture with support for advanced proxy technologies including **Reality**, **XTLS-Vision**, **Hysteria2**, and high-performance UDP transport.
+
+Built for next-generation VPN infrastructure with:
+
+- Multi-core processing
+- Advanced transport protocols
+- Anti-censorship technologies
+- High-speed UDP acceleration
+- Enterprise-level node management
+
 ---
 
-A multi-protocol node agent for **XBoard**, **V2Board**, and anything that speaks the UniProxy node API — it pulls node config and the subscriber list from the panel on an interval, runs the protocol inbounds, and reports traffic and online devices back. It embeds the **Xray-core**, **sing-box**, and **Hysteria2** cores.
+## 🚀 Protocol Feature Support
 
-## ✨ Features
+V2bX provides unified management and advanced control features across all supported protocols.
 
-| | |
+| Feature | VLESS | VMess | Trojan | Shadowsocks | Hysteria | Hysteria2 | TUIC | SOCKS | HTTP | NaiveProxy | Mieru | AnyTLS |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Automatic TLS Certificate Management | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Online User Statistics | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Routing Rules | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Custom DNS Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| IP Limit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Connection Limit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cross-Node IP Limit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| User-Level Speed Limit | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| UDP Relay Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Multi-Core Engine Support | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+---
+
+# ✨ Features
+
+| Feature | Description |
 |---|---|
-| 🧩 **Multiple cores** | `xray`, `sing`, `hysteria2` — selectable per node |
-| 🔐 **Protocols** | Shadowsocks, VLESS (**Reality + XTLS-Vision**), VMess, Trojan, Hysteria2, SOCKS, plus TUIC / AnyTLS |
-| 🛰️ **Panel integration** | XBoard / V2Board UniProxy API: config, users, traffic, online devices |
-| 📜 **Certificates** | `none` / `self` / `http` / `dns` (ACME, optional DNS provider) / `reality` |
-| 🖥️ **Deployment** | single binary + systemd, Linux `amd64 / arm64 / armv7 / armv6 / armv5 / s390x / riscv64` (Ubuntu / Debian / CentOS / Alpine / Arch) |
+| ⚡ **Multi-Core Architecture** | Supports **Xray-core**, **sing-box**, and **Hysteria2** engines |
+| 🔐 **Reality Support** | Native VLESS Reality with **XTLS-Vision support** |
+| 🌐 **Multi Protocol Engine** | Run different protocols using the best backend engine |
+| 🛰️ **Panel Integration** | Full XBoard / V2Board UniProxy API support |
+| 👥 **User Management** | Automatic user synchronization from panel |
+| 📊 **Traffic Reporting** | Real-time traffic and online device reporting |
+| 🚀 **UDP Acceleration** | High-performance UDP relay support |
+| 🧩 **Multi Architecture** | amd64 / arm64 / armv7 / armv6 / armv5 / s390x / riscv64 |
+| 🔒 **Certificate Support** | none / self / http / dns / reality |
+| ⚙️ **Production Ready** | Designed for large-scale VPN deployment |
+
+---
+
+# 🛰️ Panel Compatibility
+
+Compatible with:
+
+- **XBoard**
+- **V2Board**
+- **UniProxy compatible panels**
+
+Supported functions:
+
+✅ Node configuration sync  
+✅ User synchronization  
+✅ Traffic statistics  
+✅ Online device reporting  
+✅ Automatic configuration updates  
 
 ## 🚀 Install
 
-One-line script for Linux (as root):
+One-line script Supports for Ubuntu, Debian, CentOS, Alpine, and Arch; supports amd64, arm64, armv7, armv6, armv5, s390x, and riscv64 
 
 ```bash
 wget -N https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/V2bX-script-master/install.sh && bash install.sh
@@ -78,18 +134,26 @@ The default config file is `/etc/V2bX/config.json`; see [`example/config.json`](
 - **`CertConfig.CertMode`** — `none` / `self` / `http` / `dns` / `reality`.
 - **VLESS-Reality / XTLS-Vision** — configured on the node in the panel (dest, keys, short ID, flow) and handled by the core; the agent reads it from the panel config, so you don't hand-write keys.
 
-## 🛠️ Commands
+## 🛠️ Management Commands
 
-| Command | Does |
-|---------|------|
-| `V2bX` | open the management menu |
-| `V2bX server -c /etc/V2bX/config.json` | run the agent in the foreground (what systemd runs) |
-| `V2bX start` · `stop` · `restart` | manage the systemd service |
-| `V2bX log` | view the service log |
-| `V2bX x25519` | generate a Reality X25519 key pair |
-| `V2bX synctime` | sync system time (Reality is time-sensitive) |
-| `V2bX update` · `uninstall` | update / remove |
-| `V2bX version` | print version |
+Once installed, use `v2bx` or `V2bX` from your terminal to manage the node service.
+
+| Command | Description |
+|---|---|
+| `v2bx` | Open interactive management menu |
+| `v2bx start` | Start V2bX service |
+| `v2bx stop` | Stop V2bX service |
+| `v2bx restart` | Restart V2bX service |
+| `v2bx status` | Check service status |
+| `v2bx log` | View live logs |
+| `v2bx update` | Update to latest version |
+| `v2bx update <version>` | Update to a specific version |
+| `v2bx generate` | Generate configuration interactively |
+| `v2bx x25519` | Generate X25519 key pair for Reality |
+| `v2bx enable` | Enable startup on boot |
+| `v2bx disable` | Disable startup on boot |
+| `v2bx uninstall` | Remove V2bX completely |
+| `v2bx version` | Display installed version |
 
 ## 🧱 Build from source
 
