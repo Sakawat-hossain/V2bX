@@ -30,6 +30,9 @@ func init() {
 }
 
 func TestLego_CreateCertByDns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: needs real ACME + DNS provider credentials")
+	}
 	err := l.CreateCert()
 	if err != nil {
 		t.Error(err)
@@ -37,5 +40,8 @@ func TestLego_CreateCertByDns(t *testing.T) {
 }
 
 func TestLego_RenewCert(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test: needs real ACME + DNS provider credentials")
+	}
 	log.Println(l.RenewCert())
 }
