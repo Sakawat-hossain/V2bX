@@ -11,7 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/InazumaV/V2bX/conf"
+	"github.com/Sakawat-hossain/V2bX/conf"
 	"github.com/go-resty/resty/v2"
 )
 

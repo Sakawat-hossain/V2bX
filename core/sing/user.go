@@ -4,9 +4,9 @@ import (
 	"encoding/base64"
 	"errors"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/counter"
-	"github.com/InazumaV/V2bX/core"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/counter"
+	"github.com/Sakawat-hossain/V2bX/core"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sirupsen/logrus"
 )

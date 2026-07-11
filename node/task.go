@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/task"
-	vCore "github.com/InazumaV/V2bX/core"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/task"
+	vCore "github.com/Sakawat-hossain/V2bX/core"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -4,10 +4,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/format"
-	"github.com/InazumaV/V2bX/conf"
-	"github.com/InazumaV/V2bX/limiter"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/format"
+	"github.com/Sakawat-hossain/V2bX/conf"
+	"github.com/Sakawat-hossain/V2bX/limiter"
 )
 
 // TestCheckLimitCachedDoesNotBypassDeviceLimit is the W6 review #4

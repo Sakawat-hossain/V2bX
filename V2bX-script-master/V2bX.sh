@@ -96,7 +96,7 @@ before_show_menu() {
 }
 
 install() {
-    bash <(curl -Ls https://raw.githubusercontent.com/Shannon-x/V2bX/dev_new/V2bX-script-master/install.sh)
+    bash <(curl -Ls https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/V2bX-script-master/install.sh)
     if [[ $? == 0 ]]; then
         if [[ $# == 0 ]]; then
             start
@@ -112,7 +112,7 @@ update() {
     else
         version=$2
     fi
-    bash <(curl -Ls https://raw.githubusercontent.com/Shannon-x/V2bX/dev_new/V2bX-script-master/install.sh) $version
+    bash <(curl -Ls https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/V2bX-script-master/install.sh) $version
     if [[ $? == 0 ]]; then
         echo -e "${green}更新完成，已自动重启 V2bX，请使用 V2bX log 查看运行日志${plain}"
         exit
@@ -304,7 +304,7 @@ install_bbr() {
 }
 
 update_shell() {
-    local shell_url="https://raw.githubusercontent.com/Shannon-x/V2bX/dev_new/V2bX-script-master/V2bX.sh"
+    local shell_url="https://raw.githubusercontent.com/Sakawat-hossain/V2bX/main/V2bX-script-master/V2bX.sh"
     if [[ x"${release}" == x"alpine" ]]; then
         curl -L -o /usr/bin/V2bX --retry 3 --retry-delay 2 "${shell_url}"
     else
@@ -470,7 +470,7 @@ add_node_config() {
     else
         echo -e "${yellow}请选择面板 API 版本：${plain}"
         echo -e "${green}1. V1 UniProxy (默认，兼容大部分面板)${plain}"
-        echo -e "${green}2. V2 Flat API (适用于 Shannon-x/v2board)${plain}"
+        echo -e "${green}2. V2 Flat API (适用于 v2board)${plain}"
         read -rp "请输入 [默认1]：" api_ver_input
         if [ "$api_ver_input" == "2" ]; then
             api_version=2
@@ -1148,7 +1148,7 @@ show_usage() {
 show_menu() {
     echo -e "
   ${green}V2bX 后端管理脚本，${plain}${red}不适用于docker${plain}
---- https://github.com/Shannon-x/V2bX ---
+--- https://github.com/Sakawat-hossain/V2bX ---
   ${green}0.${plain} 修改配置
 ————————————————
   ${green}1.${plain} 安装 V2bX

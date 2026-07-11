@@ -53,7 +53,7 @@ add_node_config() {
     else
         echo -e "${yellow}请选择面板 API 版本：${plain}"
         echo -e "${green}1. V1 UniProxy (默认，兼容大部分面板)${plain}"
-        echo -e "${green}2. V2 Flat API (适用于 Shannon-x/v2board)${plain}"
+        echo -e "${green}2. V2 Flat API (适用于 v2board)${plain}"
         read -rp "请输入 [默认1]：" api_ver_input
         if [ "$api_ver_input" == "2" ]; then
             api_version=2

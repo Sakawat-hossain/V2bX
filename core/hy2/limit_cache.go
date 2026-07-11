@@ -3,7 +3,7 @@ package hy2
 import (
 	"time"
 
-	"github.com/InazumaV/V2bX/limiter"
+	"github.com/Sakawat-hossain/V2bX/limiter"
 )
 
 // checkLimitCached is the W6.1 / W3.6 后半 / audit #3 short-window cache

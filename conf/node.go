@@ -13,7 +13,7 @@ import (
 
 	"encoding/json"
 
-	"github.com/InazumaV/V2bX/common/json5"
+	"github.com/Sakawat-hossain/V2bX/common/json5"
 )
 
 // W4.1 / audit #9 #18 #51: harden the Include URL fetcher against SSRF.
@@ -157,7 +157,7 @@ type ApiConfig struct {
 	NodeType     string `json:"NodeType"`
 	Timeout      int    `json:"Timeout"`
 	RuleListPath string `json:"RuleListPath"`
-	ApiVersion   int    `json:"ApiVersion"` // 1 = V1 UniProxy (default), 2 = V2 flat API (for Shannon-x/v2board ServerV2node)
+	ApiVersion   int    `json:"ApiVersion"` // 1 = V1 UniProxy (default), 2 = V2 flat API (for v2board ServerV2node)
 }
 
 func (n *NodeConfig) UnmarshalJSON(data []byte) (err error) {

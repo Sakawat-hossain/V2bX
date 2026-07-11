@@ -1,4 +1,4 @@
-module github.com/InazumaV/V2bX
+module github.com/Sakawat-hossain/V2bX
 
 go 1.26.4
 

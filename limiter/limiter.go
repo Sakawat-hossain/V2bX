@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/format"
-	"github.com/InazumaV/V2bX/common/rate"
-	"github.com/InazumaV/V2bX/conf"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/format"
+	"github.com/Sakawat-hossain/V2bX/common/rate"
+	"github.com/Sakawat-hossain/V2bX/conf"
 )
 
 var limiters sync.Map // map[string]*Limiter

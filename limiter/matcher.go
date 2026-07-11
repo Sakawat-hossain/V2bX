@@ -6,7 +6,7 @@ import (
 	gonet "net"
 	"strings"
 
-	"github.com/InazumaV/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
 	log "github.com/sirupsen/logrus"
 	"github.com/xtls/xray-core/app/router"
 	xnet "github.com/xtls/xray-core/common/net"

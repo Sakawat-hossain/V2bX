@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/format"
-	"github.com/InazumaV/V2bX/conf"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/format"
+	"github.com/Sakawat-hossain/V2bX/conf"
 )
 
 // TestUserLimitInfoAtomicRace exercises the W2.6/W2.7 atomic conversion

@@ -7,11 +7,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/common/task"
-	"github.com/InazumaV/V2bX/conf"
-	vCore "github.com/InazumaV/V2bX/core"
-	"github.com/InazumaV/V2bX/limiter"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/common/task"
+	"github.com/Sakawat-hossain/V2bX/conf"
+	vCore "github.com/Sakawat-hossain/V2bX/core"
+	"github.com/Sakawat-hossain/V2bX/limiter"
 	log "github.com/sirupsen/logrus"
 )
 

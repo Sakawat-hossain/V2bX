@@ -3,9 +3,9 @@ package hy2
 import (
 	"sync"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/conf"
-	vCore "github.com/InazumaV/V2bX/core"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/conf"
+	vCore "github.com/Sakawat-hossain/V2bX/core"
 	"go.uber.org/zap"
 )
 

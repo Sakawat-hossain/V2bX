@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/InazumaV/V2bX/api/panel"
-	"github.com/InazumaV/V2bX/conf"
-	"github.com/InazumaV/V2bX/core/xray/app/dispatcher"
+	"github.com/Sakawat-hossain/V2bX/api/panel"
+	"github.com/Sakawat-hossain/V2bX/conf"
+	"github.com/Sakawat-hossain/V2bX/core/xray/app/dispatcher"
 	log "github.com/sirupsen/logrus"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/inbound"
