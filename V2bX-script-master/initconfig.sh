@@ -40,6 +40,10 @@ add_node_config() {
     while true; do
         read -rp "请输入节点Node ID：" NodeID
         if [[ "$NodeID" =~ ^[0-9]+$ ]]; then
+            # Strip leading zeros — "0001" is a valid entry but "NodeID": 0001
+            # is INVALID JSON (leading zeros not allowed), which breaks config
+            # parsing. Force base-10 so the written value is a clean integer.
+            NodeID=$((10#$NodeID))
             break
         else
             echo "错误：请输入正确的数字作为Node ID。"
