@@ -16,7 +16,7 @@
 
 <br>
 
-📖 Primary documentation: **[简体中文（主文档）](README.zh-CN.md)**   · **English** [简体中文（主文档）](README.zh-CN.md) 
+📖 Primary documentation: **[简体中文（主文档）](README.zh-CN.md)** · **English** (this page)
 
 </div>
 
@@ -157,7 +157,10 @@ Once installed, use `v2bx` or `V2bX` from your terminal to manage the node servi
 ## 🧱 Build from source
 
 ```bash
-go build -o V2bX      # needs Go 1.26+
+# needs Go 1.26+; build tags and GOEXPERIMENT must match the Dockerfile
+GOEXPERIMENT=jsonv2 go build -trimpath \
+  -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" \
+  -o V2bX .
 ```
 
 At runtime it needs the geo data files (`geoip.dat` / `geosite.dat`, and optionally `geoip.db` / `geosite.db`) — fetched by the install script or at deploy time, not shipped in the repo.

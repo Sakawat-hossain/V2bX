@@ -150,6 +150,7 @@ install_V2bX() {
     fi
 
     local download_url="https://github.com/Sakawat-hossain/V2bX/releases/download/${last_version}/V2bX-linux-${arch}.zip"
+    local checksum_url="https://github.com/Sakawat-hossain/V2bX/releases/download/${last_version}/SHA256SUMS.txt"
     local download_dest="/usr/local/V2bX/V2bX-linux.zip"
     if [[ x"${release}" == x"alpine" ]]; then
         curl -L -o "${download_dest}" --progress-bar --retry 3 --retry-delay 2 "${download_url}"
@@ -159,6 +160,26 @@ install_V2bX() {
     if [[ $? -ne 0 ]]; then
         echo -e "${red}下载 V2bX ${last_version} 失败，请确保你的服务器能够下载 Github 的文件${plain}"
         exit 1
+    fi
+
+    # Verify the binary against the release SHA256SUMS (fetched over verified
+    # TLS), so a tampered download is rejected even though wget above skips
+    # cert checks. If SHA256SUMS.txt is absent (older release) we warn but
+    # continue for backward compatibility.
+    local expected actual
+    expected=$(curl -fsSL "${checksum_url}" 2>/dev/null | grep "V2bX-linux-${arch}.zip" | awk '{print $1}')
+    if [[ -n "${expected}" ]]; then
+        actual=$(sha256sum "${download_dest}" | awk '{print $1}')
+        if [[ "${expected}" != "${actual}" ]]; then
+            echo -e "${red}SHA256 校验失败，已中止安装（可能被篡改或下载损坏）${plain}"
+            echo -e "  expected: ${expected}"
+            echo -e "  actual:   ${actual}"
+            rm -f "${download_dest}"
+            exit 1
+        fi
+        echo -e "${green}SHA256 校验通过${plain}"
+    else
+        echo -e "${yellow}警告：未找到 SHA256SUMS.txt，跳过完整性校验${plain}"
     fi
 
     unzip -o V2bX-linux.zip
