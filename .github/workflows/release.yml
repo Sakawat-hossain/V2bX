@@ -42,9 +42,14 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
+          # sing-box 1.13 requires the json/v2 experiment; build tags must match
+          # the Dockerfile (keep the two in sync).
+          GOEXPERIMENT: jsonv2
         run: |
           set -euo pipefail
-          go build -tags "xray,sing,hysteria2" -trimpath \
+          go build \
+            -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" \
+            -trimpath \
             -ldflags "-s -w -X 'github.com/Sakawat-hossain/V2bX/cmd.version=${GITHUB_REF_NAME}'" \
             -o V2bX .
 
