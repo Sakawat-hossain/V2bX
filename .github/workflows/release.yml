@@ -1,0 +1,86 @@
+name: Release
+
+# Tag push (e.g. v2.0.1) -> cross-compile every arch the install script knows
+# about, zip each with the geo data, and publish a GitHub Release with the
+# binaries so `install.sh` can download them.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # `name` must match the arch string the install script builds:
+        #   V2bX-linux-${arch}.zip  (see V2bX-script-master/install.sh)
+        include:
+          - { name: "64",        goarch: amd64,   goarm: "" }
+          - { name: "arm64-v8a", goarch: arm64,   goarm: "" }
+          - { name: "s390x",     goarch: s390x,   goarm: "" }
+          - { name: "riscv64",   goarch: riscv64, goarm: "" }
+          - { name: "arm32-v7a", goarch: arm,     goarm: "7" }
+          - { name: "arm32-v6",  goarch: arm,     goarm: "6" }
+          - { name: "arm32-v5",  goarch: arm,     goarm: "5" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          set -euo pipefail
+          go build -tags "xray,sing,hysteria2" -trimpath \
+            -ldflags "-s -w -X 'github.com/Sakawat-hossain/V2bX/cmd.version=${GITHUB_REF_NAME}'" \
+            -o V2bX .
+
+      - name: Download geo data
+        run: |
+          set -euo pipefail
+          curl -fsSL -o geoip.dat   https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          curl -fsSL -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+          curl -fsSL -o geoip.db    https://github.com/SagerNet/sing-geoip/releases/latest/download/geoip.db
+          curl -fsSL -o geosite.db  https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite.db
+
+      - name: Package
+        run: zip -q "V2bX-linux-${{ matrix.name }}.zip" V2bX geoip.dat geosite.dat geoip.db geosite.db
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: V2bX-linux-${{ matrix.name }}
+          path: V2bX-linux-${{ matrix.name }}.zip
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - run: ls -lhR dist
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
