@@ -103,4 +103,4 @@ go build -o V2bX      # 需要 Go 1.26+
 
 ## 📄 许可证
 
-[MPL-2.0](LICENSE)。本项目基于 [Shannon-x/V2bX](https://github.com/Shannon-x/V2bX)（[InazumaV/V2bX](https://github.com/InazumaV/V2bX) 的分支）构建，依据 Mozilla Public License 2.0 分发；按许可证要求保留上游署名与许可证声明。
+依据 [Mozilla Public License 2.0](LICENSE) 授权。

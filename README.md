@@ -171,4 +171,4 @@ At runtime it needs the geo data files (`geoip.dat` / `geosite.dat`, and optiona
 
 ## 📄 License
 
-[MPL-2.0](LICENSE). This project is based on [Shannon-x/V2bX](https://github.com/Shannon-x/V2bX) (a fork of [InazumaV/V2bX](https://github.com/InazumaV/V2bX)) and distributed under the Mozilla Public License 2.0; the upstream attribution and license notices are retained as the license requires.
+Licensed under the [Mozilla Public License 2.0](LICENSE).
